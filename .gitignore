@@ -1,0 +1,14 @@
+# Generated extractor stubs (produced by build/build-stubs.sh; embedded at build time)
+/internal/stubassets/stubs/loci-stub-*
+
+# Build outputs
+/dist/
+/loci-cli
+/loci-gui
+*.app
+
+# Produced self-extracting archives
+*-windows-amd64.exe
+*-macos-arm64
+*-macos-amd64
+*-linux-amd64

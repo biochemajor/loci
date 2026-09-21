@@ -23,3 +23,11 @@ test:
 
 clean:
 	rm -rf dist internal/stubassets/stubs/loci-stub-*
+
+# Code-sign + notarize macOS outputs (needs Apple Developer ID; see script header).
+sign-macos:
+	./build/sign-macos.sh $(BINS)
+
+# Authenticode-sign Windows outputs (needs a code-signing .pfx; see script header).
+sign-windows:
+	./build/sign-windows.sh $(BINS)

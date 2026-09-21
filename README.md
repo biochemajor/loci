@@ -103,10 +103,44 @@ The extractor prints a per-file checksum verification result (e.g.
 - With **no password**, the archive is stored unencrypted (compression only) —
   anyone with the file can extract it. Use a password if the contents are
   sensitive.
-- For distribution without security warnings you'd need to **code-sign and
-  notarize** the macOS binary (Apple Developer ID) and sign the Windows `.exe`
-  (Authenticode). loci produces unsigned binaries; signing is out of scope but
-  can be layered on top of the outputs.
+- loci produces **unsigned** binaries. To distribute without OS warnings, sign
+  them after building — see below.
+
+## Signing for distribution
+
+Unsigned self-extractors work but warn: macOS Gatekeeper blocks the first launch
+and Windows SmartScreen flags an "unknown publisher". Signing removes both. loci
+ships scripts that sign the outputs in place; you provide the certificates and
+credentials via environment variables (the scripts never store secrets).
+
+You must obtain the signing identities yourself — an **Apple Developer Program**
+membership (~$99/yr) for macOS, and a **code-signing certificate** from a CA
+(~$100–400/yr) for Windows.
+
+**macOS** — `build/sign-macos.sh` runs `codesign` (hardened runtime) then
+notarizes with `notarytool`:
+
+```sh
+export SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID123)"
+export NOTARY_PROFILE="loci-notary"   # from: xcrun notarytool store-credentials
+./build/sign-macos.sh dist/archive-macos-arm64 dist/archive-macos-amd64
+```
+
+A notarization ticket can't be stapled onto a bare executable — the binary is
+notarized (Gatekeeper checks it online on first run), but for fully offline,
+prompt-free launches wrap it in a `.dmg`/`.pkg` and staple that.
+
+**Windows** — `build/sign-windows.sh` uses `osslsigncode`, so you can
+Authenticode-sign the `.exe` from your Mac (`brew install osslsigncode`):
+
+```sh
+export WIN_PFX="/path/to/cert.pfx"
+export WIN_PFX_PASS="…"
+./build/sign-windows.sh dist/archive-windows-amd64.exe
+```
+
+On Windows you can instead use Microsoft's `signtool` (see the script header).
+Convenience targets: `make sign-macos BINS="…"` and `make sign-windows BINS="…"`.
 
 ## Layout
 

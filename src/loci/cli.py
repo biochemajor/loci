@@ -7,7 +7,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from . import __version__, countries, ics, store
+from . import __version__, bundle, countries, ics, store
 
 
 def _parse_years(spec: str) -> list[int]:
@@ -119,6 +119,23 @@ def cmd_generate(args) -> int:
     return 0
 
 
+def cmd_bundle(args) -> int:
+    """Write the JSON bundle a program reads, rather than the .ics a person subscribes to."""
+    only = _tracked(args.file) if args.tracked else None
+    if args.tracked and not only:
+        print("no countries tracked; add some first, or drop --tracked", file=sys.stderr)
+        return 1
+
+    stats = bundle.write(args.output, args.years, only)
+    for problem in stats.skipped:
+        print(f"warning: skipped {problem}", file=sys.stderr)
+    print(
+        f"{stats.countries} countries, {stats.entries} holidays, "
+        f"{stats.bytes / 1024:.0f} KB -> {args.output}/"
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     this_year = date.today().year
     p = argparse.ArgumentParser(prog="loci", description="Find public holidays for your countries and export an .ics calendar file.")
@@ -142,6 +159,18 @@ def build_parser() -> argparse.ArgumentParser:
     c = sub.add_parser("countries", help="show all supported countries")
     c.add_argument("search", nargs="?", help="filter by name or code")
     c.set_defaults(func=cmd_countries)
+
+    b = sub.add_parser("bundle", help="write holiday tables as JSON for another program to read")
+    b.add_argument(
+        "-y", "--years", type=_parse_years, default=[this_year, this_year + 1],
+        help=f"year or range, e.g. 2027 or 2026-2030 (default: {this_year}-{this_year + 1})",
+    )
+    b.add_argument("-o", "--output", type=Path, default=Path("holidays-json"), help="directory to write into")
+    b.add_argument(
+        "--tracked", action="store_true",
+        help="only the countries in the list; without this, every supported country",
+    )
+    b.set_defaults(func=cmd_bundle)
 
     for name, func, helptext in (
         ("preview", cmd_preview, "print holidays to the terminal"),

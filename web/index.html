@@ -1,0 +1,773 @@
+<title>Loci Holiday Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #F3F5F7;
+    --panel: #FFFFFF;
+    --ink: #17212E;
+    --muted: #5B6778;
+    --line: #DCE1E8;
+    --soft: #E9EDF3;
+    --airmail: #2551C4;
+    --airmail-ink: #FFFFFF;
+    --stamp: #C8372A;
+    --today: #FFF3C4;
+    --focus: #2551C4;
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #0F151D;
+      --panel: #17202B;
+      --ink: #E7ECF2;
+      --muted: #9AA6B5;
+      --line: #2A3542;
+      --soft: #1F2935;
+      --airmail: #7C9EF5;
+      --airmail-ink: #0F151D;
+      --stamp: #F07A6C;
+      --today: #3A3317;
+      --focus: #7C9EF5;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #0F151D;
+    --panel: #17202B;
+    --ink: #E7ECF2;
+    --muted: #9AA6B5;
+    --line: #2A3542;
+    --soft: #1F2935;
+    --airmail: #7C9EF5;
+    --airmail-ink: #0F151D;
+    --stamp: #F07A6C;
+    --today: #3A3317;
+    --focus: #7C9EF5;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font: 16px/1.5 var(--body);
+    padding-inline: 16px;
+    padding-block: 0 48px;
+  }
+  .airmail {
+    height: 8px;
+    margin-inline: -16px;
+    background: repeating-linear-gradient(-45deg,
+      var(--stamp) 0 14px, transparent 14px 22px,
+      var(--airmail) 22px 36px, transparent 36px 44px);
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  header.top {
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+    gap: 12px 24px; padding-block: 28px 20px;
+  }
+  h1 {
+    font: 700 clamp(28px, 5vw, 40px)/1.05 var(--display);
+    letter-spacing: -0.02em; margin: 0; text-wrap: balance;
+  }
+  h1 small {
+    display: block; font: 500 13px/1.4 var(--mono); letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+  }
+  .lede { margin: 8px 0 0; color: var(--muted); max-width: 60ch; }
+  .sync { font: 400 13px/1.4 var(--mono); color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .sync i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .sync.live i { background: #2E9D5B; }
+
+  main { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 24px; align-items: start; }
+  @media (max-width: 820px) { main { grid-template-columns: minmax(0, 1fr); } }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .panel > section { padding: 20px; }
+  .panel > section + section { border-top: 1px solid var(--line); }
+  h2 {
+    font: 700 13px/1.3 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 12px; display: flex; justify-content: space-between; gap: 8px;
+  }
+  h2 span { color: var(--ink); }
+
+  label { font-size: 14px; font-weight: 700; display: block; margin-bottom: 6px; }
+  input[type="text"], select {
+    width: 100%; font: inherit; color: var(--ink); background: var(--ground);
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  }
+  input:focus-visible, select:focus-visible, button:focus-visible {
+    outline: 2px solid var(--focus); outline-offset: 2px;
+  }
+  .field + .field { margin-top: 12px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    font: 700 15px/1 var(--body); cursor: pointer; border-radius: 8px;
+    padding: 11px 16px; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  }
+  button.primary { background: var(--airmail); border-color: var(--airmail); color: var(--airmail-ink); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .hint { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+  .error { font-size: 14px; color: var(--stamp); margin: 8px 0 0; }
+
+  ul.countries { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  ul.countries li {
+    display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+    padding: 8px 6px; border-radius: 6px;
+  }
+  ul.countries li:hover { background: var(--soft); }
+  .flag { font-size: 20px; line-height: 1; }
+  .cname { min-width: 0; }
+  .cname b { display: block; font-weight: 700; overflow-wrap: anywhere; }
+  .cname code { font: 400 12px/1.3 var(--mono); color: var(--muted); }
+  .remove {
+    padding: 6px 8px; font-size: 13px; border-color: transparent; background: transparent; color: var(--muted);
+  }
+  .remove:hover { color: var(--stamp); border-color: var(--line); }
+  .empty { color: var(--muted); font-size: 15px; margin: 0 0 12px; }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; }
+  .quick button { font-size: 14px; font-weight: 400; padding: 7px 10px; }
+
+  .toolbar {
+    display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--line);
+  }
+  .toolbar .field { margin: 0; }
+  .toolbar select { width: auto; min-width: 150px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; font-weight: 400; font-size: 14px; padding: 9px 12px; background: transparent; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); font-weight: 700; }
+  .summary { font: 400 13px/1.4 var(--mono); color: var(--muted); padding: 12px 20px 0; }
+  .example-note {
+    margin: 12px 20px 0; padding: 10px 12px; border: 1px dashed var(--stamp); border-radius: 8px;
+    color: var(--stamp); font-size: 14px;
+  }
+
+  .agenda { padding: 4px 20px 20px; }
+  .month {
+    font: 700 22px/1.2 var(--display); letter-spacing: -0.01em; margin: 22px 0 6px;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .month em { font: 400 13px/1 var(--mono); color: var(--muted); font-style: normal; }
+  .day {
+    display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; padding: 9px 0;
+    border-top: 1px solid var(--soft);
+  }
+  .day.is-today { background: var(--today); border-radius: 6px; padding-inline: 8px; margin-inline: -8px; }
+  .date { font: 500 14px/1.4 var(--mono); font-variant-numeric: tabular-nums; }
+  .date span { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+  .events { display: grid; gap: 4px; }
+  .event { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+  .event .flag { font-size: 16px; }
+  .event .who { color: var(--muted); font-size: 14px; white-space: nowrap; }
+  .event .what { overflow-wrap: anywhere; }
+  .weekend { font: 400 11px/1 var(--mono); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; margin-left: 4px; }
+
+  .export p { margin: 0 0 12px; font-size: 14px; color: var(--muted); }
+  .export ol { margin: 12px 0 0; padding-left: 20px; font-size: 14px; color: var(--muted); display: grid; gap: 4px; }
+  .export ol b { color: var(--ink); }
+  .status { font-size: 14px; margin: 10px 0 0; min-height: 1.4em; }
+  footer { max-width: 1120px; margin: 24px auto 0; font-size: 13px; color: var(--muted); }
+  footer code { font-family: var(--mono); }
+
+  @media (max-width: 480px) {
+    .day { grid-template-columns: 72px minmax(0, 1fr); }
+    .event { flex-wrap: wrap; row-gap: 0; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    ul.countries li { transition: background 120ms; }
+  }
+</style>
+
+<div class="airmail" aria-hidden="true"></div>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1><small>Loci · public holidays</small>Our countries’ holidays, in one calendar</h1>
+      <p class="lede">Add every country the team works with. Everyone who opens this page sees the same list, and anyone can download it as a calendar file.</p>
+    </div>
+    <div class="sync" id="sync"><i></i><span id="syncText">Connecting…</span></div>
+  </header>
+
+  <main>
+    <div class="panel">
+      <section>
+        <h2>Countries <span id="countTotal">0</span></h2>
+        <ul class="countries" id="list"></ul>
+        <div id="emptyState" hidden>
+          <p class="empty">No countries yet. Add one below, or start with a common one:</p>
+          <div class="quick" id="quick"></div>
+        </div>
+      </section>
+
+      <section id="addSection">
+        <form id="addForm" autocomplete="off">
+          <div class="field">
+            <label for="countryInput">Add a country</label>
+            <input type="text" id="countryInput" list="countryOptions" placeholder="Japan, DE, Brazil…">
+            <datalist id="countryOptions"></datalist>
+          </div>
+          <div class="field" id="regionField" hidden>
+            <label for="regionSelect">Region <span class="hint" style="font-weight:400">(optional, adds local holidays)</span></label>
+            <select id="regionSelect"></select>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <button type="submit" class="primary" id="addBtn">Add to list</button>
+          </div>
+          <p class="error" id="addError" hidden></p>
+        </form>
+        <p class="hint" id="readonlyNote" hidden>You can view this list but not change it. Ask the page owner for Contributor access to add countries.</p>
+      </section>
+
+      <section class="export">
+        <h2>Calendar file</h2>
+        <p>Download every holiday in the selected years as one calendar. Events are all-day and marked “free”, so they won’t block your schedule.</p>
+        <div class="field">
+          <label for="calName">Calendar name</label>
+          <input type="text" id="calName" value="International Holidays">
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button type="button" class="primary" id="downloadBtn">Download calendar</button>
+          <button type="button" id="copyBtn">Copy .ics text</button>
+        </div>
+        <p class="status" id="exportStatus" role="status"></p>
+        <ol>
+          <li>The download is a <b>.zip</b> holding one <b>.ics</b> file. Unzip it first.</li>
+          <li><b>Google Calendar:</b> Settings → Import &amp; export → Import. Pick a separate “Holidays” calendar so you can remove it cleanly later.</li>
+          <li><b>Outlook:</b> File → Open &amp; Export → Import/Export → iCalendar (.ics).</li>
+          <li><b>Apple Calendar:</b> File → Import, or double-click the file.</li>
+        </ol>
+      </section>
+    </div>
+
+    <div class="panel">
+      <div class="toolbar">
+        <div class="field">
+          <label for="yearSelect">Years</label>
+          <select id="yearSelect"></select>
+        </div>
+        <div class="field">
+          <label id="showLabel">Show</label>
+          <div class="seg" role="group" aria-labelledby="showLabel">
+            <button type="button" id="showUpcoming" aria-pressed="true">Upcoming</button>
+            <button type="button" id="showAll" aria-pressed="false">Whole range</button>
+          </div>
+        </div>
+      </div>
+      <p class="example-note" id="exampleNote" hidden>Example preview for the United States, United Kingdom and Japan. Add your own countries to replace it.</p>
+      <p class="summary" id="summary"></p>
+      <div class="agenda" id="agenda"></div>
+    </div>
+  </main>
+
+  <footer id="footer">Holiday data from the open-source <code>holidays</code> library.</footer>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const QUICK = ["US", "GB", "IN", "DE", "JP", "BR", "AU", "CA", "FR", "MX"];
+  const EXAMPLE = ["US", "GB", "JP"];
+  const LOCAL_KEY = "loci.countries";
+  const PREFS_KEY = "loci.prefs";
+
+  let DATA = null;          // {years, generated, countries}
+  let keys = [];            // tracked entries, e.g. ["JP", "US-CA"]
+  let db = null;            // shared store, or null when this view can't use it
+  let canWrite = true;
+  let showUpcoming = true;
+  const today = new Date();
+  const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  // ---------- helpers ----------
+  const flag = (code) => [...code].map((c) => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join("");
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const store = {
+    get(k, fallback) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch { return fallback; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  function describe(key) {
+    const [code, sub] = key.split(/-(.+)/);
+    const c = DATA.countries[code];
+    if (!c) return null;
+    const s = sub && c.s ? c.s[sub] : null;
+    if (sub && !s) return null;
+    const region = s ? (s.n || sub) : null;
+    return { key, code, sub: sub || null, name: c.n, region, label: region ? `${c.n} (${region})` : c.n };
+  }
+
+  function holidaysFor(key) {
+    const d = describe(key);
+    if (!d) return [];
+    const c = DATA.countries[d.code];
+    let list = c.h;
+    if (d.sub) {
+      const s = c.s[d.sub];
+      const minus = new Set((s["-"] || []).map((p) => p.join("|")));
+      list = list.filter((p) => !minus.has(p.join("|"))).concat(s["+"] || []);
+    }
+    return list.map(([date, name]) => ({ date, name, country: d }));
+  }
+
+  function selectedYears() {
+    const [a, b] = $("yearSelect").value.split("-").map(Number);
+    return [a, b || a];
+  }
+
+  function collect(list) {
+    const [lo, hi] = selectedYears();
+    const out = [];
+    for (const key of list) {
+      for (const h of holidaysFor(key)) {
+        const y = +h.date.slice(0, 4);
+        if (y >= lo && y <= hi) out.push(h);
+      }
+    }
+    out.sort((x, y) => x.date.localeCompare(y.date) || x.country.label.localeCompare(y.country.label) || x.name.localeCompare(y.name));
+    return out;
+  }
+
+  // ---------- rendering ----------
+  function renderList() {
+    const list = $("list");
+    list.textContent = "";
+    const [lo, hi] = selectedYears();
+    for (const key of keys) {
+      const d = describe(key);
+      if (!d) continue;
+      const n = holidaysFor(key).filter((h) => { const y = +h.date.slice(0, 4); return y >= lo && y <= hi; }).length;
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="flag" aria-hidden="true"></span><span class="cname"><b></b><code></code></span>`;
+      li.querySelector(".flag").textContent = flag(d.code);
+      li.querySelector("b").textContent = d.label;
+      li.querySelector("code").textContent = `${d.key} · ${n} holidays`;
+      if (canWrite) {
+        const btn = document.createElement("button");
+        btn.type = "button"; btn.className = "remove"; btn.textContent = "Remove";
+        btn.setAttribute("aria-label", `Remove ${d.label}`);
+        btn.addEventListener("click", () => removeKey(key));
+        li.appendChild(btn);
+      } else {
+        li.appendChild(document.createElement("span"));
+      }
+      list.appendChild(li);
+    }
+    $("countTotal").textContent = keys.length;
+    $("emptyState").hidden = keys.length > 0;
+    renderQuick();
+  }
+
+  function renderQuick() {
+    const q = $("quick");
+    q.textContent = "";
+    if (!canWrite) return;
+    for (const code of QUICK) {
+      if (!DATA.countries[code] || keys.includes(code)) continue;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = `${flag(code)} ${DATA.countries[code].n}`;
+      b.addEventListener("click", () => addKey(code));
+      q.appendChild(b);
+    }
+  }
+
+  function renderAgenda() {
+    const usingExample = keys.length === 0;
+    $("exampleNote").hidden = !usingExample;
+    let items = collect(usingExample ? EXAMPLE : keys);
+    const inRange = items.length;
+    if (showUpcoming) items = items.filter((h) => h.date >= todayISO);
+
+    const [lo, hi] = selectedYears();
+    const range = lo === hi ? `${lo}` : `${lo}–${hi}`;
+    $("summary").textContent = showUpcoming
+      ? `${items.length} upcoming of ${inRange} holidays in ${range}`
+      : `${inRange} holidays in ${range}`;
+
+    const agenda = $("agenda");
+    agenda.textContent = "";
+    if (!items.length) {
+      const p = document.createElement("p");
+      p.className = "empty";
+      p.style.marginTop = "20px";
+      p.textContent = showUpcoming ? "No more holidays in this range. Pick later years or show the whole range." : "No holidays in this range.";
+      agenda.appendChild(p);
+      return;
+    }
+
+    const monthFmt = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
+    const dayFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+    const wdFmt = new Intl.DateTimeFormat(undefined, { weekday: "long", timeZone: "UTC" });
+
+    // group by month, then by day
+    const months = new Map();
+    for (const h of items) {
+      const m = h.date.slice(0, 7);
+      if (!months.has(m)) months.set(m, new Map());
+      const days = months.get(m);
+      if (!days.has(h.date)) days.set(h.date, []);
+      days.get(h.date).push(h);
+    }
+    const frag = document.createDocumentFragment();
+    for (const [m, days] of months) {
+      const count = [...days.values()].reduce((a, v) => a + v.length, 0);
+      const head = document.createElement("h3");
+      head.className = "month";
+      head.textContent = monthFmt.format(new Date(`${m}-01T00:00:00Z`));
+      const em = document.createElement("em");
+      em.textContent = `${count}`;
+      head.appendChild(em);
+      frag.appendChild(head);
+      for (const [date, hs] of days) {
+        const dt = new Date(`${date}T00:00:00Z`);
+        const row = document.createElement("div");
+        row.className = "day" + (date === todayISO ? " is-today" : "");
+        const dcell = document.createElement("div");
+        dcell.className = "date";
+        dcell.textContent = dayFmt.format(dt);
+        const wd = document.createElement("span");
+        wd.textContent = date === todayISO ? "Today" : wdFmt.format(dt);
+        dcell.appendChild(wd);
+        const ev = document.createElement("div");
+        ev.className = "events";
+        const weekend = dt.getUTCDay() === 0 || dt.getUTCDay() === 6;
+        for (const h of hs) {
+          const e = document.createElement("div");
+          e.className = "event";
+          e.innerHTML = `<span class="flag" aria-hidden="true"></span><span class="what"></span><span class="who"></span>`;
+          e.querySelector(".flag").textContent = flag(h.country.code);
+          e.querySelector(".what").textContent = h.name;
+          e.querySelector(".who").textContent = h.country.label;
+          if (weekend) {
+            const w = document.createElement("span");
+            w.className = "weekend"; w.textContent = "weekend";
+            e.querySelector(".what").appendChild(w);
+          }
+          ev.appendChild(e);
+        }
+        row.append(dcell, ev);
+        frag.appendChild(row);
+      }
+    }
+    agenda.appendChild(frag);
+  }
+
+  function render() {
+    renderList();
+    renderAgenda();
+    $("downloadBtn").disabled = keys.length === 0;
+    $("copyBtn").disabled = keys.length === 0;
+  }
+
+  // ---------- adding / removing ----------
+  const lookup = new Map(); // normalized alias -> code
+
+  function resolveCountry(text) {
+    const t = norm(text.replace(/^[\u{1F1E6}-\u{1F1FF}]{2}\s*/u, ""));
+    return lookup.get(t) || null;
+  }
+
+  function onCountryInput() {
+    const code = resolveCountry($("countryInput").value);
+    const subs = code && DATA.countries[code].s;
+    const field = $("regionField");
+    const sel = $("regionSelect");
+    if (!subs) { field.hidden = true; sel.textContent = ""; return; }
+    if (sel.dataset.code === code) { field.hidden = false; return; }
+    sel.dataset.code = code;
+    sel.textContent = "";
+    const all = new Option("Whole country (national holidays)", "");
+    sel.appendChild(all);
+    Object.entries(subs)
+      .map(([k, v]) => [k, v.n || k])
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .forEach(([k, n]) => sel.appendChild(new Option(n === k ? k : `${n} (${k})`, k)));
+    field.hidden = false;
+  }
+
+  async function addKey(key) {
+    $("addError").hidden = true;
+    if (keys.includes(key)) { showError(`${describe(key).label} is already on the list.`); return; }
+    if (db) {
+      try {
+        await db.collection("countries").doc(key).set({ key, addedAt: new Date().toISOString() });
+      } catch (e) {
+        handleWriteError(e);
+        return;
+      }
+    } else {
+      keys = [...keys, key];
+      store.set(LOCAL_KEY, keys);
+      render();
+    }
+  }
+
+  async function removeKey(key) {
+    if (db) {
+      try { await db.collection("countries").doc(key).delete(); }
+      catch (e) { handleWriteError(e); }
+    } else {
+      keys = keys.filter((k) => k !== key);
+      store.set(LOCAL_KEY, keys);
+      render();
+    }
+  }
+
+  function handleWriteError(e) {
+    if (e && e.code === "invalid_argument") {
+      canWrite = false;
+      applyWriteAccess();
+      render();
+    } else if (e && e.code === "quota_exceeded") {
+      showError("The list is full. Remove a country before adding another.");
+    } else {
+      showError("That change didn’t save. Check your connection and try again.");
+    }
+  }
+
+  function showError(msg) {
+    const el = $("addError");
+    el.textContent = msg;
+    el.hidden = false;
+  }
+
+  function applyWriteAccess() {
+    $("addForm").hidden = !canWrite;
+    $("readonlyNote").hidden = canWrite;
+  }
+
+  $("countryInput").addEventListener("input", onCountryInput);
+  $("addForm").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const text = $("countryInput").value.trim();
+    if (!text) { showError("Type a country name or code first."); return; }
+    const code = resolveCountry(text);
+    if (!code) { showError(`“${text}” isn’t a country we have holiday data for. Try its English name or ISO code, like JP or Japan.`); return; }
+    const sub = $("regionField").hidden ? "" : $("regionSelect").value;
+    addKey(sub ? `${code}-${sub}` : code);
+    $("countryInput").value = "";
+    $("regionField").hidden = true;
+    $("regionSelect").dataset.code = "";
+  });
+
+  // ---------- iCalendar ----------
+  const enc = new TextEncoder();
+
+  function escapeText(s) {
+    return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+  }
+
+  function fold(line) {
+    const bytes = enc.encode(line);
+    if (bytes.length <= 75) return line;
+    const parts = [];
+    let start = 0, limit = 75;
+    const dec = new TextDecoder();
+    while (start < bytes.length) {
+      let end = Math.min(start + limit, bytes.length);
+      while (end < bytes.length && (bytes[end] & 0xC0) === 0x80) end--;
+      parts.push(dec.decode(bytes.slice(start, end)));
+      start = end; limit = 74;
+    }
+    return parts.join("\r\n ");
+  }
+
+  async function sha1hex(s) {
+    const buf = await crypto.subtle.digest("SHA-1", enc.encode(s));
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  function nextDay(iso) {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10).replace(/-/g, "");
+  }
+
+  async function buildICS() {
+    const items = collect(keys);
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+    const name = $("calName").value.trim() || "International Holidays";
+    const lines = [
+      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//loci//International Holidays//EN",
+      "CALSCALE:GREGORIAN", "METHOD:PUBLISH", `X-WR-CALNAME:${escapeText(name)}`,
+    ];
+    for (const h of items) {
+      const key = h.country.key;
+      // Same UID scheme as the loci CLI, so re-imports update events instead of duplicating them.
+      const digest = (await sha1hex(`${key}|${h.date}|${h.name}`)).slice(0, 16);
+      const ymd = h.date.replace(/-/g, "");
+      lines.push(
+        "BEGIN:VEVENT",
+        `UID:${ymd}-${key.toLowerCase()}-${digest}@loci`,
+        `DTSTAMP:${stamp}`,
+        `DTSTART;VALUE=DATE:${ymd}`,
+        `DTEND;VALUE=DATE:${nextDay(h.date)}`,
+        `SUMMARY:${escapeText(`${flag(h.country.code)} ${h.country.label}: ${h.name}`)}`,
+        `CATEGORIES:${escapeText(h.country.name)}`,
+        `DESCRIPTION:${escapeText(`Public holiday in ${h.country.label}.`)}`,
+        "TRANSP:TRANSPARENT",
+        "END:VEVENT",
+      );
+    }
+    lines.push("END:VCALENDAR");
+    return { text: lines.map(fold).join("\r\n") + "\r\n", count: items.length, name };
+  }
+
+  // Minimal "stored" (uncompressed) zip with one file: .ics isn't a type the viewer can save directly.
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+    return t;
+  })();
+  function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function zipOne(filename, content) {
+    const name = enc.encode(filename);
+    const data = enc.encode(content);
+    const crc = crc32(data);
+    const now = new Date();
+    const time = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    const date = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true); local.setUint16(4, 20, true); local.setUint16(6, 0x0800, true);
+    local.setUint16(8, 0, true); local.setUint16(10, time, true); local.setUint16(12, date, true);
+    local.setUint32(14, crc, true); local.setUint32(18, data.length, true); local.setUint32(22, data.length, true);
+    local.setUint16(26, name.length, true); local.setUint16(28, 0, true);
+    const central = new DataView(new ArrayBuffer(46));
+    central.setUint32(0, 0x02014b50, true); central.setUint16(4, 20, true); central.setUint16(6, 20, true);
+    central.setUint16(8, 0x0800, true); central.setUint16(10, 0, true); central.setUint16(12, time, true);
+    central.setUint16(14, date, true); central.setUint32(16, crc, true); central.setUint32(20, data.length, true);
+    central.setUint32(24, data.length, true); central.setUint16(28, name.length, true);
+    central.setUint32(42, 0, true);
+    const cdOffset = 30 + name.length + data.length;
+    const cdSize = 46 + name.length;
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, 1, true); end.setUint16(10, 1, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, cdOffset, true);
+    return new Blob([local, name, data, central, name, end]);
+  }
+
+  function slug(s) { return s.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "holidays"; }
+
+  $("downloadBtn").addEventListener("click", async () => {
+    const status = $("exportStatus");
+    status.textContent = "Preparing…";
+    const downloads = await window.claude?.use?.("downloads");
+    const { text, count, name } = await buildICS();
+    if (!downloads) {
+      status.textContent = "Downloading isn’t available in this view. Use “Copy .ics text”, paste it into a text file and save it with a .ics ending.";
+      return;
+    }
+    const [lo, hi] = selectedYears();
+    const base = `${slug(name)}-${lo === hi ? lo : `${lo}-${hi}`}`;
+    try {
+      await downloads.save({ filename: `${base}.zip`, data: zipOne(`${base}.ics`, text) });
+      status.textContent = `Saved ${count} holidays. Unzip it, then import ${base}.ics.`;
+    } catch (e) {
+      const code = e && e.code;
+      status.textContent =
+        code === "declined" ? "Download cancelled." :
+        code === "rate_limited" ? "A download prompt is already open. Finish that one first." :
+        "Downloading isn’t available here. Use “Copy .ics text” instead.";
+    }
+  });
+
+  $("copyBtn").addEventListener("click", async () => {
+    const status = $("exportStatus");
+    const { text, count } = await buildICS();
+    try {
+      await navigator.clipboard.writeText(text);
+      status.textContent = `Copied ${count} holidays as calendar text. Paste into a file named holidays.ics.`;
+    } catch {
+      status.textContent = "Your browser blocked copying. Use Download calendar instead.";
+    }
+  });
+
+  // ---------- preferences ----------
+  function savePrefs() {
+    store.set(PREFS_KEY, { years: $("yearSelect").value, upcoming: showUpcoming, name: $("calName").value });
+  }
+  function setShow(upcoming) {
+    showUpcoming = upcoming;
+    $("showUpcoming").setAttribute("aria-pressed", String(upcoming));
+    $("showAll").setAttribute("aria-pressed", String(!upcoming));
+    savePrefs();
+    renderAgenda();
+  }
+  $("showUpcoming").addEventListener("click", () => setShow(true));
+  $("showAll").addEventListener("click", () => setShow(false));
+  $("yearSelect").addEventListener("change", () => { savePrefs(); render(); });
+  $("calName").addEventListener("change", savePrefs);
+
+  // ---------- shared list ----------
+  async function connectStore() {
+    const sync = $("sync");
+    db = await window.claude?.use?.("db") ?? null;
+    if (!db) {
+      keys = store.get(LOCAL_KEY, []).filter((k) => describe(k));
+      $("syncText").textContent = "Saved in this browser only";
+      render();
+      return;
+    }
+    const user = await window.claude.use("user");
+    const allowed = user ? await user.can("data.write") : null;
+    if (allowed === false) { canWrite = false; applyWriteAccess(); }
+    db.collection("countries").orderBy("addedAt").onSnapshot((snap) => {
+      keys = snap.docs.map((d) => d.id).filter((k) => describe(k));
+      sync.classList.add("live");
+      $("syncText").textContent = "Shared list · live";
+      render();
+    }, () => {
+      sync.classList.remove("live");
+      $("syncText").textContent = "Lost connection. Reload to reconnect.";
+    });
+  }
+
+  // ---------- boot ----------
+  async function boot() {
+    try {
+      const res = await fetch("holidays.json");
+      DATA = await res.json();
+    } catch {
+      $("agenda").textContent = "Couldn’t load holiday data. Reload the page to try again.";
+      return;
+    }
+    for (const [code, c] of Object.entries(DATA.countries)) {
+      lookup.set(norm(code), code);
+      lookup.set(norm(c.n), code);
+    }
+    const opts = $("countryOptions");
+    Object.entries(DATA.countries)
+      .sort((a, b) => a[1].n.localeCompare(b[1].n))
+      .forEach(([code, c]) => opts.appendChild(new Option(`${code}`, `${flag(code)} ${c.n}`)));
+
+    const years = DATA.years;
+    const prefs = store.get(PREFS_KEY, {});
+    const sel = $("yearSelect");
+    const thisYear = today.getFullYear();
+    const choices = [];
+    for (const y of years) choices.push(`${y}`);
+    for (let i = 0; i < years.length - 1; i++) choices.push(`${years[i]}-${years[i + 1]}`);
+    if (years.length > 2) choices.push(`${years[0]}-${years[years.length - 1]}`);
+    choices.forEach((v) => sel.appendChild(new Option(v.replace("-", "–"), v)));
+    const def = choices.includes(`${thisYear}-${thisYear + 1}`) ? `${thisYear}-${thisYear + 1}` : choices[0];
+    sel.value = choices.includes(prefs.years) ? prefs.years : def;
+    if (typeof prefs.upcoming === "boolean") { showUpcoming = prefs.upcoming; setShow(showUpcoming); }
+    if (prefs.name) $("calName").value = prefs.name;
+    $("footer").textContent = `Holiday data for ${Object.keys(DATA.countries).length} countries and territories, ${years[0]}–${years[years.length - 1]}, from the open-source holidays library (exported ${DATA.generated}). Observed-day substitutions are included.`;
+
+    render();
+    connectStore();
+  }
+
+  boot();
+})();
+</script>

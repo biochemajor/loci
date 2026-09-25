@@ -55,3 +55,17 @@ For Google Calendar, the cleanest approach is to create a dedicated
 pip install -e '.[test]'
 pytest
 ```
+
+## Web page
+
+`web/index.html` is a shareable version of the same tool, published as a claude.ai
+artifact. It keeps one country list for everyone who opens it, shows upcoming
+holidays, and downloads the calendar as a `.zip` holding the `.ics` file (the
+viewer can't save `.ics` directly). Event IDs match the CLI's.
+
+The page can't run Python, so its holiday data is precomputed. To extend the
+years, rebuild the data and republish:
+
+```sh
+python web/build_data.py 2026 2030   # writes web/holidays.json
+```

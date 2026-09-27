@@ -19,6 +19,7 @@
     Twinkling stars around the title     SETTINGS: TITLE_TWINKLE, TWINKLE_*
     Shooting stars in the background     SETTINGS: SHOOTING_STARS, SHOOTING_STAR_*
     The full moon (on/off)               SETTINGS: SHOW_MOON
+    Clouds drifting past the moon        SETTINGS: SHOW_CLOUDS, CLOUD_*
     Moon size, position, colors          "FULL MOON" section of the <style>
     Title colors (incl. shimmer glint)   COLORS block: --title-*
     The heading ("Counting down to")     SETTINGS: HEADING
@@ -62,6 +63,7 @@
     --moon-edge: #d9d3bf;                   /* moon surface, shaded edge     */
     --moon-crater: rgba(150, 142, 120, .28);/* crater shading                */
     --moon-glow: rgba(220, 240, 255, .35);  /* halo around the moon          */
+    --cloud: rgba(165, 180, 205, .75);      /* clouds (color + see-through)  */
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
@@ -82,6 +84,7 @@
       --moon-edge: #cfc8b0;
       --moon-crater: rgba(140, 130, 105, .32);
       --moon-glow: rgba(31, 159, 180, .3);
+      --cloud: rgba(120, 140, 165, .6);
     }
   }
   /* Tip: to force one theme for everyone, add data-theme="dark" to the
@@ -310,6 +313,7 @@
     .title, .title span { animation: none !important; filter: none !important; }
     .sparkles, .sky { display: none; }
     .moon { animation: none; }
+    .clouds { display: none; }
   }
 
   /* ==========================================================================
@@ -357,11 +361,15 @@
      Drawn entirely with CSS: layered radial gradients make the craters and
      the shaded edge; box-shadow makes the glow. Colors: --moon-* at the top.
      ========================================================================== */
-  .moon {
+  :root {
     --moon-size: clamp(56px, 11vw, 130px);  /* diameter (min, scales, max) */
+    --moon-top: clamp(16px, 4vw, 40px);     /* distance from top edge      */
+    --moon-right: clamp(16px, 5vw, 60px);   /* distance from right edge    */
+  }
+  .moon {
     position: fixed;
-    top: clamp(16px, 4vw, 40px);            /* distance from top edge   */
-    right: clamp(16px, 5vw, 60px);          /* distance from right edge */
+    top: var(--moon-top);
+    right: var(--moon-right);
     width: var(--moon-size);
     height: var(--moon-size);
     border-radius: 50%;
@@ -384,6 +392,45 @@
     50%      { box-shadow: 0 0 35px 10px var(--moon-glow), 0 0 100px 35px var(--moon-glow); }
   }
 
+  /* ==========================================================================
+     CLOUDS (SHOW_CLOUDS)
+     Soft blurred puffs that drift right-to-left across the moon, in front of
+     it but behind the page content. They fade out on the left side so they
+     don't cross the title. Color/see-through: --cloud at the top.
+     ========================================================================== */
+  .clouds {
+    position: fixed;
+    top: 0; right: 0;
+    width: min(560px, 75vw);                        /* how far left clouds travel */
+    height: calc(var(--moon-top) + var(--moon-size) * 1.5);  /* band around the moon */
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+    /* fade clouds in at the right edge and out toward the left */
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 45%, #000 92%, transparent);
+            mask-image: linear-gradient(to right, transparent, #000 45%, #000 92%, transparent);
+  }
+  .cloud {
+    position: absolute;
+    left: 100%;
+    width: 220px;                                  /* base cloud size (scaled per cloud) */
+    height: 100px;
+    /* a cloud = a few overlapping soft ovals: ellipse width height at x y.
+       Each oval stays inside the box so no edge gets cut off. */
+    background:
+      radial-gradient(ellipse 24% 34% at 28% 60%, var(--cloud) 50%, transparent 100%),
+      radial-gradient(ellipse 26% 40% at 50% 48%, var(--cloud) 50%, transparent 100%),
+      radial-gradient(ellipse 22% 32% at 72% 60%, var(--cloud) 50%, transparent 100%),
+      radial-gradient(ellipse 42% 22% at 50% 72%, var(--cloud) 55%, transparent 100%);
+    filter: blur(5px);                             /* softness of the edges */
+    transform: scale(var(--scale, 1));
+    animation: cloud-drift var(--dur, 50s) linear var(--delay, 0s) infinite;
+  }
+  @keyframes cloud-drift {
+    from { left: 100%; }
+    to   { left: -300px; }                         /* fully off the left edge */
+  }
+
   .shooting-star::after {                        /* glowing head */
     content: "";
     position: absolute;
@@ -402,6 +449,8 @@
 <div class="sky" id="sky" aria-hidden="true"></div>
 <!-- Full moon in the top-right corner (styles: "FULL MOON" section). -->
 <div class="moon" id="moon" aria-hidden="true"></div>
+<!-- Clouds drifting past the moon (styles: "CLOUDS" section). -->
+<div class="clouds" id="clouds" aria-hidden="true"></div>
 
 <!-- Hidden SVG filter that makes the "water" title ripple. It generates
      moving noise (feTurbulence) and uses it to push the text's pixels around
@@ -512,6 +561,17 @@
   // Full moon in the top-right corner. true = show, false = hide.
   // Size, position and colors are in the "FULL MOON" section of the <style>.
   const SHOW_MOON = true;
+
+  // Clouds drifting past the moon.
+  //   SHOW_CLOUDS   true = on, false = off
+  //   CLOUD_COUNT   how many clouds are drifting at once
+  //   CLOUD_SPEED   seconds for one cloud to cross [fastest, slowest]
+  //   CLOUD_SIZE    size relative to the base cloud [smallest, largest]
+  // Color and see-through amount: --cloud in the COLORS block at the top.
+  const SHOW_CLOUDS = true;
+  const CLOUD_COUNT = 3;
+  const CLOUD_SPEED = [35, 60];
+  const CLOUD_SIZE  = [0.6, 1.2];
 
   // Small text above the date line.
   const HEADING = "Counting down to";
@@ -671,6 +731,28 @@
 
   // --- Full moon --------------------------------------------------------------
   if (!SHOW_MOON) document.getElementById("moon").remove();
+
+  // --- Clouds -----------------------------------------------------------------
+  // Gives a cloud a random height (within the band around the moon) and size.
+  function shapeCloud(cloud) {
+    cloud.style.top = rand(-10, 55) + "%";
+    cloud.style.setProperty("--scale", rand(CLOUD_SIZE[0], CLOUD_SIZE[1]));
+  }
+  if (SHOW_CLOUDS) {
+    const layer = document.getElementById("clouds");
+    for (let i = 0; i < CLOUD_COUNT; i++) {
+      const cloud = document.createElement("div");
+      cloud.className = "cloud";
+      const dur = rand(CLOUD_SPEED[0], CLOUD_SPEED[1]);
+      cloud.style.setProperty("--dur", dur + "s");
+      // Spread the clouds out so they don't travel in a clump.
+      cloud.style.setProperty("--delay", -(dur * (i + rand(0.1, 0.9)) / CLOUD_COUNT) + "s");
+      shapeCloud(cloud);
+      // Each time a cloud leaves on the left, it comes back with a new shape.
+      cloud.addEventListener("animationiteration", () => shapeCloud(cloud));
+      layer.appendChild(cloud);
+    }
+  }
 
   // --- Shooting stars ---------------------------------------------------------
   const sky = document.getElementById("sky");

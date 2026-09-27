@@ -18,7 +18,8 @@
     The title animation style            SETTINGS: TITLE_EFFECT
     Twinkling stars around the title     SETTINGS: TITLE_TWINKLE, TWINKLE_*
     Shooting stars in the background     SETTINGS: SHOOTING_STARS, SHOOTING_STAR_*
-    The full moon (on/off)               SETTINGS: SHOW_MOON
+    The moon (on/off)                    SETTINGS: SHOW_MOON
+    Moon waxing and waning               SETTINGS: MOON_PHASES, MOON_CYCLE_SECONDS
     Clouds drifting past the moon        SETTINGS: SHOW_CLOUDS, CLOUD_*
     Moon size, position, colors          "FULL MOON" section of the <style>
     Title colors (incl. shimmer glint)   COLORS block: --title-*
@@ -63,6 +64,7 @@
     --moon-edge: #d9d3bf;                   /* moon surface, shaded edge     */
     --moon-crater: rgba(150, 142, 120, .28);/* crater shading                */
     --moon-glow: rgba(220, 240, 255, .35);  /* halo around the moon          */
+    --moon-shadow: rgba(14, 17, 22, .9);    /* dark (unlit) part of the moon */
     --cloud: rgba(165, 180, 205, .75);      /* clouds (color + see-through)  */
   }
   @media (prefers-color-scheme: light) {
@@ -84,6 +86,7 @@
       --moon-edge: #cfc8b0;
       --moon-crater: rgba(140, 130, 105, .32);
       --moon-glow: rgba(31, 159, 180, .3);
+      --moon-shadow: rgba(150, 160, 178, .8);
       --cloud: rgba(120, 140, 165, .6);
     }
   }
@@ -312,7 +315,7 @@
     .sep { animation: none; }
     .title, .title span { animation: none !important; filter: none !important; }
     .sparkles, .sky { display: none; }
-    .moon { animation: none; }
+    .moon::before { animation: none; }
     .clouds { display: none; }
   }
 
@@ -360,6 +363,9 @@
      FULL MOON (SHOW_MOON)
      Drawn entirely with CSS: layered radial gradients make the craters and
      the shaded edge; box-shadow makes the glow. Colors: --moon-* at the top.
+     Phases (MOON_PHASES): the script draws the dark part of the moon as a
+     shape in the <svg> inside it, and sets --lit (0 = new, 1 = full) so the
+     glow dims as the moon darkens.
      ========================================================================== */
   :root {
     --moon-size: clamp(56px, 11vw, 130px);  /* diameter (min, scales, max) */
@@ -385,8 +391,17 @@
       radial-gradient(ellipse 30% 22% at 30% 58%, var(--moon-crater), transparent 100%),
       /* surface: bright upper-left fading to a shaded edge */
       radial-gradient(circle at 40% 38%, var(--moon) 0 45%, var(--moon-edge) 100%);
+  }
+  .moon::before {                           /* the glow, on its own layer so it can dim */
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    opacity: calc(.15 + .85 * var(--lit, 1));   /* faint glow even at new moon */
     animation: moon-glow 6s ease-in-out infinite;   /* 6s = one slow glow pulse */
   }
+  .moon svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .moon path { fill: var(--moon-shadow); }
   @keyframes moon-glow {
     0%, 100% { box-shadow: 0 0 25px 6px var(--moon-glow), 0 0 70px 20px var(--moon-glow); }
     50%      { box-shadow: 0 0 35px 10px var(--moon-glow), 0 0 100px 35px var(--moon-glow); }
@@ -448,7 +463,20 @@
 <!-- Background layer the shooting stars fly across. -->
 <div class="sky" id="sky" aria-hidden="true"></div>
 <!-- Full moon in the top-right corner (styles: "FULL MOON" section). -->
-<div class="moon" id="moon" aria-hidden="true"></div>
+<div class="moon" id="moon" aria-hidden="true">
+  <!-- The moon's shadow. The script changes the path's shape to make phases;
+       the blur softens the line between light and dark, and the clip keeps
+       the shadow inside the moon's circle. -->
+  <svg viewBox="0 0 100 100">
+    <defs>
+      <clipPath id="moon-clip"><circle cx="50" cy="50" r="50"/></clipPath>
+      <filter id="moon-soft"><feGaussianBlur stdDeviation="1.8"/></filter>
+    </defs>
+    <g clip-path="url(#moon-clip)">
+      <path id="moon-shadow" filter="url(#moon-soft)" d=""/>
+    </g>
+  </svg>
+</div>
 <!-- Clouds drifting past the moon (styles: "CLOUDS" section). -->
 <div class="clouds" id="clouds" aria-hidden="true"></div>
 
@@ -558,9 +586,15 @@
   const SHOOTING_STAR_LENGTH   = [80, 180];
   const SHOOTING_STAR_DURATION = [0.8, 1.6];
 
-  // Full moon in the top-right corner. true = show, false = hide.
+  // Moon in the top-right corner. true = show, false = hide.
   // Size, position and colors are in the "FULL MOON" section of the <style>.
   const SHOW_MOON = true;
+
+  // Moon phases: the moon wanes from full to new and waxes back to full.
+  //   MOON_PHASES         true = cycle through phases, false = always full
+  //   MOON_CYCLE_SECONDS  seconds for one complete cycle (full → new → full)
+  const MOON_PHASES = true;
+  const MOON_CYCLE_SECONDS = 60;
 
   // Clouds drifting past the moon.
   //   SHOW_CLOUDS   true = on, false = off
@@ -730,7 +764,43 @@
   schedule();
 
   // --- Full moon --------------------------------------------------------------
-  if (!SHOW_MOON) document.getElementById("moon").remove();
+  const moonEl = document.getElementById("moon");
+  const moonShadow = document.getElementById("moon-shadow");
+
+  // Draws the moon at phase p, where 0 = new, 0.25 = first quarter (right half
+  // lit), 0.5 = full, 0.75 = last quarter (left half lit), 1 = new again.
+  // The shadow shape is one curved edge of the moon (the "limb", drawn a bit
+  // oversized and clipped) plus the curved line between light and dark (the
+  // "terminator"), an ellipse whose width follows the phase.
+  function setMoonPhase(p) {
+    const R = 54;                                    // oversized limb radius
+    const rx = R * Math.abs(Math.cos(2 * Math.PI * p));  // terminator width
+    const waxing = p < 0.5;
+    const crescent = waxing ? p < 0.25 : p > 0.75;
+    // Waxing: shadow on the left. Waning: shadow on the right.
+    const limbSweep = waxing ? 0 : 1;
+    // Crescent: terminator bulges into the lit side (shadow is mostly the disc).
+    // Gibbous: it bulges into the dark side (shadow is a thin sliver).
+    const termSweep = waxing ? (crescent ? 0 : 1) : (crescent ? 1 : 0);
+    moonShadow.setAttribute("d",
+      `M50 ${50 - R} A${R} ${R} 0 0 ${limbSweep} 50 ${50 + R} ` +
+      `A${rx} ${R} 0 0 ${termSweep} 50 ${50 - R} Z`);
+    // Fraction of the disc that is lit (0..1), used to dim the glow.
+    moonEl.style.setProperty("--lit", ((1 - Math.cos(2 * Math.PI * p)) / 2).toFixed(3));
+  }
+
+  if (!SHOW_MOON) {
+    moonEl.remove();
+  } else if (MOON_PHASES && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const moonStart = performance.now();
+    (function moonFrame(now) {
+      // Start at full (0.5) and move forward: full → waning → new → waxing → full.
+      setMoonPhase((0.5 + (now - moonStart) / (MOON_CYCLE_SECONDS * 1000)) % 1);
+      requestAnimationFrame(moonFrame);
+    })(moonStart);
+  } else {
+    setMoonPhase(0.5);                               // always full
+  }
 
   // --- Clouds -----------------------------------------------------------------
   // Gives a cloud a random height (within the band around the moon) and size.

@@ -16,7 +16,7 @@
                                          TARGET_ZONE_LABEL
     The big title ("Reishi's Return")    SETTINGS: TITLE
     The title animation style            SETTINGS: TITLE_EFFECT
-    Title colors                         COLORS block: --title-*
+    Title colors (incl. shimmer glint)   COLORS block: --title-*
     The heading ("Counting down to")     SETTINGS: HEADING
     The message shown at zero            SETTINGS: DONE_MESSAGE, ENDED_MESSAGE
     Confetti on/off, duration, colors    SETTINGS: CONFETTI_*
@@ -51,6 +51,7 @@
     --title-1: #0b6e99;
     --title-2: #3ec1d3;
     --title-3: #e6fbff;
+    --title-shine: #ffffff;   /* the glint in the "shimmer" effect */
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
@@ -64,6 +65,7 @@
       --title-1: #0a5a80;
       --title-2: #1f9fb4;
       --title-3: #5cc9dc;
+      --title-shine: #d9f7fc;
     }
   }
   /* Tip: to force one theme for everyone, add data-theme="dark" to the
@@ -117,16 +119,22 @@
   }
   @keyframes water-flow { to { background-position: -250% 0; } }
 
-  /* --- "shimmer": a bright band of light sweeping across the text ---------- */
+  /* --- "shimmer": a bright glint of light sweeping across the text ---------
+     The glint crosses in the first 55% of each cycle, then pauses.
+     4s = time per cycle (sweep + pause). --title-shine = glint color. */
   .title[data-effect="shimmer"] {
     background: linear-gradient(110deg,
-      var(--title-2) 40%, var(--title-3) 50%, var(--title-2) 60%);
-    background-size: 250% 100%;
+      var(--title-1) 0%, var(--title-2) 44%, var(--title-shine) 50%,
+      var(--title-2) 56%, var(--title-1) 100%);
+    background-size: 300% 100%;
     -webkit-background-clip: text; background-clip: text;
     color: transparent;
-    animation: shimmer 3s ease-in-out infinite;
+    animation: shimmer 4s ease-in-out infinite;
   }
-  @keyframes shimmer { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+  @keyframes shimmer {
+    0%        { background-position: 100% 0; }   /* glint just off the left edge  */
+    55%, 100% { background-position: 0% 0; }      /* glint just off the right edge */
+  }
 
   /* --- "glow": soft pulsing glow ------------------------------------------- */
   .title[data-effect="glow"] { animation: glow 3s ease-in-out infinite; }
@@ -353,11 +361,11 @@
 
   // Title animation. One of:
   //   "water"   shimmering water: blue light drifting through rippling letters
-  //   "shimmer" a bright band of light sweeping across the text
+  //   "shimmer" a bright glint of light sweeping across, then a short pause
   //   "glow"    soft pulsing glow
   //   "wave"    letters gently bob up and down, one after another
   //   "none"    no animation
-  const TITLE_EFFECT = "water";
+  const TITLE_EFFECT = "shimmer";
 
   // Small text above the date line.
   const HEADING = "Counting down to";

@@ -16,6 +16,7 @@
                                          TARGET_ZONE_LABEL
     The big title ("Reishi's Return")    SETTINGS: TITLE
     The title animation style            SETTINGS: TITLE_EFFECT
+    Twinkling stars around the title     SETTINGS: TITLE_TWINKLE, TWINKLE_*
     Title colors (incl. shimmer glint)   COLORS block: --title-*
     The heading ("Counting down to")     SETTINGS: HEADING
     The message shown at zero            SETTINGS: DONE_MESSAGE, ENDED_MESSAGE
@@ -52,6 +53,7 @@
     --title-2: #3ec1d3;
     --title-3: #e6fbff;
     --title-shine: #ffffff;   /* the glint in the "shimmer" effect */
+    --twinkle: #e6fbff;       /* color of the twinkling stars */
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
@@ -66,6 +68,7 @@
       --title-2: #1f9fb4;
       --title-3: #5cc9dc;
       --title-shine: #d9f7fc;
+      --twinkle: #1f9fb4;
     }
   }
   /* Tip: to force one theme for everyone, add data-theme="dark" to the
@@ -159,6 +162,32 @@
     animation: bob 2.4s ease-in-out infinite;
   }
   @keyframes bob { 50% { transform: translateY(-.12em); color: var(--title-3); } }
+
+  /* --- Twinkling stars (TITLE_TWINKLE) -----------------------------------
+     Works together with any TITLE_EFFECT. The script scatters small star
+     shapes over and around the title; each one grows, spins a little and
+     fades, then reappears somewhere else. */
+  .title-wrap { position: relative; display: inline-block; }
+  .title-wrap .title { margin-bottom: 1.4rem; }
+  .sparkles {
+    position: absolute;
+    inset: -.15em -.3em calc(1.4rem - .15em);   /* area stars can appear in */
+    pointer-events: none;
+  }
+  .sparkles svg {
+    position: absolute;
+    width: 1em; height: 1em;
+    margin: -.5em 0 0 -.5em;                    /* center the star on its spot */
+    fill: var(--twinkle);
+    filter: drop-shadow(0 0 3px var(--twinkle));
+    opacity: 0;
+    transform: scale(0);
+    animation: twinkle var(--dur, 2s) ease-in-out var(--delay, 0s) infinite;
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+    50%      { opacity: 1; transform: scale(1) rotate(45deg); }
+  }
 
   /* "COUNTING DOWN TO" heading */
   .kicker {
@@ -265,6 +294,7 @@
     .flip.animate .flap-top, .flip.animate .flap-bottom { animation-duration: .01s; animation-delay: 0s; }
     .sep { animation: none; }
     .title, .title span { animation: none !important; filter: none !important; }
+    .sparkles { display: none; }
   }
 
   /* ==========================================================================
@@ -316,7 +346,11 @@
 
 <main>
   <!-- Title, heading and date line: filled in by the script from SETTINGS. -->
-  <h1 class="title" id="title"></h1>
+  <!-- The title, plus a layer the twinkling stars are added to. -->
+  <div class="title-wrap">
+    <h1 class="title" id="title"></h1>
+    <div class="sparkles" id="sparkles" aria-hidden="true"></div>
+  </div>
   <p class="kicker" id="heading"></p>
   <p class="target" id="target-label"></p>
 
@@ -377,6 +411,17 @@
   //   "none"    no animation
   const TITLE_EFFECT = "glow";
 
+  // Twinkling stars over and around the title (works with any TITLE_EFFECT).
+  //   TITLE_TWINKLE    true = on, false = off
+  //   TWINKLE_COUNT    how many stars are twinkling at once
+  //   TWINKLE_SIZE     star size range in pixels [smallest, largest]
+  //   TWINKLE_SPEED    seconds per twinkle [fastest, slowest]
+  // Star color: --twinkle in the COLORS block at the top.
+  const TITLE_TWINKLE = true;
+  const TWINKLE_COUNT = 9;
+  const TWINKLE_SIZE  = [8, 22];
+  const TWINKLE_SPEED = [1.6, 3.2];
+
   // Small text above the date line.
   const HEADING = "Counting down to";
 
@@ -412,6 +457,32 @@
     });
   } else {
     titleEl.textContent = TITLE;
+  }
+
+  // --- Twinkling stars --------------------------------------------------------
+  // A 4-point star shape (24x24 drawing, scaled by CSS).
+  const STAR = '<svg viewBox="0 0 24 24"><path d="M12 0C13 8 16 11 24 12C16 13 13 16 12 24C11 16 8 13 0 12C8 11 11 8 12 0Z"/></svg>';
+  const rand = (min, max) => min + Math.random() * (max - min);
+
+  // Moves a star to a random spot with a random size.
+  function placeStar(star) {
+    star.style.left = rand(0, 100) + "%";
+    star.style.top = rand(0, 100) + "%";
+    star.style.fontSize = rand(TWINKLE_SIZE[0], TWINKLE_SIZE[1]) + "px";
+  }
+
+  if (TITLE_TWINKLE) {
+    const layer = document.getElementById("sparkles");
+    for (let i = 0; i < TWINKLE_COUNT; i++) {
+      layer.insertAdjacentHTML("beforeend", STAR);
+      const star = layer.lastChild;
+      const dur = rand(TWINKLE_SPEED[0], TWINKLE_SPEED[1]);
+      star.style.setProperty("--dur", dur + "s");
+      star.style.setProperty("--delay", -rand(0, dur) + "s");  // start mid-twinkle, out of sync
+      placeStar(star);
+      // Each time a twinkle finishes (star is invisible), jump somewhere new.
+      star.addEventListener("animationiteration", () => placeStar(star));
+    }
   }
   document.getElementById("heading").textContent = HEADING;
   document.getElementById("done").textContent = DONE_MESSAGE;

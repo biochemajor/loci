@@ -18,6 +18,8 @@
     The title animation style            SETTINGS: TITLE_EFFECT
     Twinkling stars around the title     SETTINGS: TITLE_TWINKLE, TWINKLE_*
     Shooting stars in the background     SETTINGS: SHOOTING_STARS, SHOOTING_STAR_*
+    The full moon (on/off)               SETTINGS: SHOW_MOON
+    Moon size, position, colors          "FULL MOON" section of the <style>
     Title colors (incl. shimmer glint)   COLORS block: --title-*
     The heading ("Counting down to")     SETTINGS: HEADING
     The message shown at zero            SETTINGS: DONE_MESSAGE, ENDED_MESSAGE
@@ -56,6 +58,10 @@
     --title-shine: #ffffff;   /* the glint in the "shimmer" effect */
     --twinkle: #e6fbff;       /* color of the twinkling stars */
     --shooting-star: #e6fbff; /* color of the shooting stars */
+    --moon: #fdfbf2;                        /* moon surface, bright center   */
+    --moon-edge: #d9d3bf;                   /* moon surface, shaded edge     */
+    --moon-crater: rgba(150, 142, 120, .28);/* crater shading                */
+    --moon-glow: rgba(220, 240, 255, .35);  /* halo around the moon          */
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
@@ -72,6 +78,10 @@
       --title-shine: #d9f7fc;
       --twinkle: #1f9fb4;
       --shooting-star: #1f9fb4;
+      --moon: #fbf8ee;
+      --moon-edge: #cfc8b0;
+      --moon-crater: rgba(140, 130, 105, .32);
+      --moon-glow: rgba(31, 159, 180, .3);
     }
   }
   /* Tip: to force one theme for everyone, add data-theme="dark" to the
@@ -299,6 +309,7 @@
     .sep { animation: none; }
     .title, .title span { animation: none !important; filter: none !important; }
     .sparkles, .sky { display: none; }
+    .moon { animation: none; }
   }
 
   /* ==========================================================================
@@ -341,6 +352,38 @@
     transform-origin: left center;
     opacity: 0;
   }
+  /* ==========================================================================
+     FULL MOON (SHOW_MOON)
+     Drawn entirely with CSS: layered radial gradients make the craters and
+     the shaded edge; box-shadow makes the glow. Colors: --moon-* at the top.
+     ========================================================================== */
+  .moon {
+    --moon-size: clamp(56px, 11vw, 130px);  /* diameter (min, scales, max) */
+    position: fixed;
+    top: clamp(16px, 4vw, 40px);            /* distance from top edge   */
+    right: clamp(16px, 5vw, 60px);          /* distance from right edge */
+    width: var(--moon-size);
+    height: var(--moon-size);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;                             /* behind the page content */
+    background:
+      /* craters and darker "seas": circle at x% y%, solid to the first %,
+         fading out by the second %. Add/remove lines to change the pattern. */
+      radial-gradient(circle at 34% 32%, var(--moon-crater) 0 6%,  transparent 14%),
+      radial-gradient(circle at 62% 56%, var(--moon-crater) 0 9%,  transparent 20%),
+      radial-gradient(circle at 44% 72%, var(--moon-crater) 0 4%,  transparent 10%),
+      radial-gradient(circle at 70% 28%, var(--moon-crater) 0 3%,  transparent 9%),
+      radial-gradient(ellipse 30% 22% at 30% 58%, var(--moon-crater), transparent 100%),
+      /* surface: bright upper-left fading to a shaded edge */
+      radial-gradient(circle at 40% 38%, var(--moon) 0 45%, var(--moon-edge) 100%);
+    animation: moon-glow 6s ease-in-out infinite;   /* 6s = one slow glow pulse */
+  }
+  @keyframes moon-glow {
+    0%, 100% { box-shadow: 0 0 25px 6px var(--moon-glow), 0 0 70px 20px var(--moon-glow); }
+    50%      { box-shadow: 0 0 35px 10px var(--moon-glow), 0 0 100px 35px var(--moon-glow); }
+  }
+
   .shooting-star::after {                        /* glowing head */
     content: "";
     position: absolute;
@@ -357,6 +400,8 @@
 <canvas id="confetti"></canvas>
 <!-- Background layer the shooting stars fly across. -->
 <div class="sky" id="sky" aria-hidden="true"></div>
+<!-- Full moon in the top-right corner (styles: "FULL MOON" section). -->
+<div class="moon" id="moon" aria-hidden="true"></div>
 
 <!-- Hidden SVG filter that makes the "water" title ripple. It generates
      moving noise (feTurbulence) and uses it to push the text's pixels around
@@ -463,6 +508,10 @@
   const SHOOTING_STAR_EVERY    = [2, 6];
   const SHOOTING_STAR_LENGTH   = [80, 180];
   const SHOOTING_STAR_DURATION = [0.8, 1.6];
+
+  // Full moon in the top-right corner. true = show, false = hide.
+  // Size, position and colors are in the "FULL MOON" section of the <style>.
+  const SHOW_MOON = true;
 
   // Small text above the date line.
   const HEADING = "Counting down to";
@@ -619,6 +668,9 @@
     if (!finished) setTimeout(schedule, 1000 - (Date.now() % 1000) + 5);
   }
   schedule();
+
+  // --- Full moon --------------------------------------------------------------
+  if (!SHOW_MOON) document.getElementById("moon").remove();
 
   // --- Shooting stars ---------------------------------------------------------
   const sky = document.getElementById("sky");

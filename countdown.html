@@ -173,17 +173,19 @@
 
 <script>
   // ---- Configuration -------------------------------------------------------
-  // November 2, 2026 at 16:00. With no offset this is the *viewer's* local time.
-  // To pin a specific zone, append an offset, e.g. "2026-11-02T16:00:00-05:00"
-  // (US Eastern Standard Time — DST ends Nov 1, 2026).
-  const TARGET = "2026-11-02T16:00:00";
+  // November 2, 2026 at 16:00 Atlantic Standard Time (UTC-4, no DST).
+  // The offset pins one moment for every viewer, wherever they are.
+  const TARGET = "2026-11-02T16:00:00-04:00";
+  const TARGET_ZONE = "America/Puerto_Rico";   // an IANA zone that is always AST
+  const TARGET_ZONE_LABEL = "AST";
   // -------------------------------------------------------------------------
 
   const target = new Date(TARGET);
 
   document.getElementById("target-label").innerHTML =
-    target.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" }) +
-    " · <span>" + target.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false }) + "</span>";
+    target.toLocaleDateString(undefined, { timeZone: TARGET_ZONE, weekday: "long", month: "long", day: "numeric", year: "numeric" }) +
+    " · <span>" + target.toLocaleTimeString(undefined, { timeZone: TARGET_ZONE, hour: "2-digit", minute: "2-digit", hour12: false }) +
+    " " + TARGET_ZONE_LABEL + "</span>";
 
   function makeCard(ch) {
     const el = document.createElement("div");

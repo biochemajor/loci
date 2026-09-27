@@ -24,6 +24,15 @@
     Starfield                            SETTINGS: SHOW_STARS, STAR_*
     Water + moon reflection              SETTINGS: SHOW_WATER, WATER_HEIGHT
     Clouds drifting past the moon        SETTINGS: SHOW_CLOUDS, CLOUD_*
+    Seasons (one season, or changing)    SETTINGS: SEASON_MODE, SEASON, SEASONS
+    Falling leaves, snow, petals         SETTINGS: SHOW_WEATHER, WEATHER_AMOUNT
+    Northern lights, mist, lanterns      SETTINGS: SHOW_AURORA, SHOW_MIST, SHOW_LANTERNS
+    Constellations, hills + trees        SETTINGS: SHOW_CONSTELLATIONS, SHOW_HILLS
+    Milestones, last 10 s, the finish    SETTINGS: MILESTONES, FINAL_COUNTDOWN, FINISH_*
+    Progress ring around the moon        SETTINGS: SHOW_PROGRESS_RING, PROGRESS_START
+    Mouse trail, click stars, parallax   SETTINGS: POINTER_TRAIL, CLICK_SHOOTING_STAR,
+                                         PARALLAX
+    Night sounds (speaker button)        SETTINGS: SOUND_BUTTON, SOUND_VOLUME
     Moon size, position, colors          "FULL MOON" section of the <style>
     Title colors (incl. shimmer glint)   COLORS block: --title-*
     The heading ("Counting down to")     SETTINGS: HEADING
@@ -34,6 +43,13 @@
     Card size                            "FLIP CARD" section of the <style>
 
   Tip: after editing, save the file and refresh the browser to see the change.
+
+  PREVIEWS (try effects without waiting): add one of these to the end of the
+  page address, e.g.  countdown.html#finish
+    #final       the last 15 seconds, then the finish
+    #finish      the finish (fireworks, confetti, the moon swelling)
+    #milestone   a milestone celebration
+    #spring  #summer  #autumn  #winter   show only that season
   =============================================================================
 -->
 <html lang="en">
@@ -75,6 +91,18 @@
     --moonlight: 255, 247, 222;             /* moon reflection on the water
                                                (three numbers: red, green, blue) */
     --cloud: rgba(165, 180, 205, .75);      /* clouds (color + see-through)  */
+    --land: #04070c;                        /* near hills + trees on the shore */
+    --land-far: #0b111b;                    /* hills further away            */
+    --ring: #7fe3f0;                        /* progress ring around the moon */
+    /* The colors below are three numbers (red, green, blue) so the script can
+       fade them in and out. */
+    --snow: 244, 248, 255;                  /* snowflakes (and snow on hills) */
+    --mist: 190, 205, 230;                  /* mist over the water           */
+    --lantern: 255, 170, 70;                /* floating lanterns             */
+    --aurora-1: 80, 255, 170;               /* northern lights: green        */
+    --aurora-2: 70, 200, 255;               /*                  blue         */
+    --aurora-3: 180, 110, 255;              /*                  purple       */
+    --constellation: 180, 210, 255;         /* constellation lines + stars   */
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
@@ -102,6 +130,16 @@
       --water-bottom: #9fb9cf;
       --moonlight: 255, 255, 255;
       --cloud: rgba(120, 140, 165, .6);
+      --land: #8a9fb2;
+      --land-far: #a9bacb;
+      --ring: #1f9fb4;
+      --snow: 140, 160, 185;
+      --mist: 255, 255, 255;
+      --lantern: 255, 150, 40;
+      --aurora-1: 40, 190, 130;
+      --aurora-2: 40, 150, 220;
+      --aurora-3: 150, 90, 220;
+      --constellation: 90, 115, 150;
     }
   }
   /* Tip: to force one theme for everyone, add data-theme="dark" to the
@@ -332,6 +370,7 @@
     .moon::before { animation: none; }
     .fireflies { display: none; }
     .clouds { display: none; }
+    .clock.pulse { animation: none; }
   }
 
   /* ==========================================================================
@@ -400,6 +439,11 @@
     border-radius: 50%;
     pointer-events: none;
     z-index: 0;                             /* behind the page content */
+    /* parallax shift (set by the script) and the size change at the finish */
+    translate: calc(var(--px, 0) * -10px) calc(var(--py, 0) * -6px);
+    scale: var(--moon-scale, 1);
+    transform-origin: 100% 0;               /* grow from the top-right corner */
+    transition: scale 3s ease, box-shadow 3s ease;
     background:
       /* craters and darker "seas": circle at x% y%, solid to the first %,
          fading out by the second %. Add/remove lines to change the pattern. */
@@ -419,8 +463,8 @@
     opacity: calc(.15 + .85 * var(--lit, 1));   /* faint glow even at new moon */
     animation: moon-glow 6s ease-in-out infinite;   /* 6s = one slow glow pulse */
   }
-  .moon svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .moon path { fill: var(--moon-shadow); }
+  .moon .moon-disc { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .moon-disc path { fill: var(--moon-shadow); }
   @keyframes moon-glow {
     0%, 100% { box-shadow: 0 0 25px 6px var(--moon-glow), 0 0 70px 20px var(--moon-glow); }
     50%      { box-shadow: 0 0 35px 10px var(--moon-glow), 0 0 100px 35px var(--moon-glow); }
@@ -436,14 +480,15 @@
     position: fixed;
     top: 0; right: 0;
     width: min(560px, 75vw);                        /* how far left clouds travel */
+    translate: calc(var(--px, 0) * -18px) calc(var(--py, 0) * -8px);   /* parallax */
     /* band around the moon; tall enough that no cloud gets its bottom cut off */
     height: calc(var(--moon-top) + var(--moon-size) + 160px);
     overflow: hidden;
     pointer-events: none;
     z-index: 0;
-    /* fade clouds in at the right edge and out toward the left */
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 45%, #000 92%, transparent);
-            mask-image: linear-gradient(to right, transparent, #000 45%, #000 92%, transparent);
+    /* fade clouds out toward the left (they slide in from off-screen right) */
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 45%);
+            mask-image: linear-gradient(to right, transparent, #000 45%);
   }
   .cloud {
     position: absolute;
@@ -471,7 +516,10 @@
      Small glowing dots. The script moves them around slowly; the CSS below
      makes each one blink on and off at its own pace. Color: --firefly.
      ========================================================================== */
-  .fireflies { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+  .fireflies {
+    position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0;
+    translate: calc(var(--px, 0) * -26px) calc(var(--py, 0) * -12px);  /* parallax */
+  }
   .firefly {
     position: absolute;
     left: 0; top: 0;
@@ -497,10 +545,108 @@
     background: var(--shooting-star);
     box-shadow: 0 0 6px 2px var(--shooting-star);
   }
+
+  /* ==========================================================================
+     EXTRA LAYERS
+     #fx: mist, lanterns and falling leaves / snow / petals (behind the clock).
+     #front: fireworks, star bursts and pointer sparkles (in front of it all).
+     ========================================================================== */
+  canvas#fx    { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+  canvas#front { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+
+  /* ==========================================================================
+     PROGRESS RING AROUND THE MOON (SHOW_PROGRESS_RING)
+     ========================================================================== */
+  .moon .moon-ring {
+    position: absolute;
+    inset: -14%;                                   /* how far outside the moon */
+    width: 128%; height: 128%;
+    overflow: visible;
+    transform: rotate(-90deg);                     /* start filling from the top */
+  }
+  .moon-ring circle { fill: none; stroke: var(--ring); }
+  .moon-ring .ring-track { stroke-opacity: .15; stroke-width: 1.2; }
+  .moon-ring .ring-fill {
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-dasharray: 100;                         /* the circle's length is set to 100 */
+    stroke-dashoffset: 100;                        /* 100 = empty, 0 = full (set by the script) */
+    filter: drop-shadow(0 0 3px var(--ring));
+    transition: stroke-dashoffset 1s linear;
+  }
+  /* At the finish (FINISH_MOON_SWELL) the moon grows and glows brightly. */
+  .moon.finale { --moon-scale: 1.5; box-shadow: 0 0 80px 30px var(--moon-glow); }
+  .moon.finale::before { opacity: 1; animation-duration: 2.5s; }
+
+  /* ==========================================================================
+     FINAL 10 SECONDS (FINAL_COUNTDOWN)
+     The clock grows, the seconds turn the accent color, and the whole clock
+     pulses once per second.
+     ========================================================================== */
+  .clock { transition: transform .8s cubic-bezier(.2, 1.4, .4, 1); }
+  body.final .clock { transform: scale(1.12); }
+  body.final [data-unit="seconds"] .flip { color: var(--accent); }
+  .clock.pulse { animation: final-pulse .9s ease-out; }
+  @keyframes final-pulse {
+    from { scale: 1.1; filter: drop-shadow(0 0 16px var(--accent)); }
+    to   { scale: 1;   filter: drop-shadow(0 0 0 transparent); }
+  }
+  @media (max-width: 480px) { body.final .clock { transform: scale(1.04); } }  /* phones */
+
+  /* ==========================================================================
+     MILESTONE MESSAGE (MILESTONES)
+     A pill at the top of the page that fades in, stays, then fades out.
+     ========================================================================== */
+  .milestone {
+    position: fixed;
+    top: 16px; left: 0; right: 0;
+    width: max-content; max-width: calc(100% - 32px);
+    margin: 0 auto;
+    z-index: 3;
+    padding: .45em 1.2em;
+    border-radius: 999px;
+    background: var(--card);
+    border: 1px solid var(--card-edge);
+    box-shadow: 0 0 24px rgba(255, 138, 61, .35);
+    color: var(--accent);
+    font: 700 clamp(1rem, 3.5vw, 1.5rem) Georgia, "Times New Roman", serif;
+    text-align: center;
+    pointer-events: none;
+    animation: milestone 4.5s ease forwards;       /* 4.5s = how long it shows */
+  }
+  @keyframes milestone {
+    0%   { opacity: 0; translate: 0 -12px; scale: .9; }
+    12%  { opacity: 1; translate: 0 0; scale: 1; }
+    80%  { opacity: 1; }
+    100% { opacity: 0; translate: 0 -12px; }
+  }
+
+  /* ==========================================================================
+     SPEAKER BUTTON FOR THE NIGHT SOUNDS (SOUND_BUTTON)
+     ========================================================================== */
+  .sound-btn {
+    position: fixed;
+    right: 16px; bottom: 16px;
+    z-index: 3;
+    width: 44px; height: 44px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--card-edge);
+    background: var(--card);
+    color: var(--muted);
+    opacity: .85;
+    cursor: pointer;
+  }
+  .sound-btn[hidden] { display: none; }
+  .sound-btn:hover { color: var(--text); opacity: 1; }
+  .sound-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sound-btn[aria-pressed="true"] { color: var(--accent); }
 </style>
 </head>
 <body>
 <canvas id="confetti"></canvas>
+<!-- Fireworks, star bursts and pointer sparkles (in front of everything). -->
+<canvas id="front" aria-hidden="true"></canvas>
 <!-- Starfield and water with the moon's reflection (painted by the script). -->
 <canvas id="scene" aria-hidden="true"></canvas>
 <!-- Background layer the shooting stars fly across. -->
@@ -510,7 +656,7 @@
   <!-- The moon's shadow. The script changes the path's shape to make phases;
        the blur softens the line between light and dark, and the clip keeps
        the shadow inside the moon's circle. -->
-  <svg viewBox="0 0 100 100">
+  <svg class="moon-disc" viewBox="0 0 100 100">
     <defs>
       <clipPath id="moon-clip"><circle cx="50" cy="50" r="50"/></clipPath>
       <filter id="moon-soft"><feGaussianBlur stdDeviation="1.8"/></filter>
@@ -519,11 +665,19 @@
       <path id="moon-shadow" filter="url(#moon-soft)" d=""/>
     </g>
   </svg>
+  <!-- Progress ring (SHOW_PROGRESS_RING). pathLength="100" makes the circle's
+       length 100, so the script can fill it in by percent. -->
+  <svg class="moon-ring" id="moon-ring" viewBox="0 0 100 100">
+    <circle class="ring-track" cx="50" cy="50" r="48" pathLength="100"/>
+    <circle class="ring-fill" id="ring-fill" cx="50" cy="50" r="48" pathLength="100"/>
+  </svg>
 </div>
 <!-- Clouds drifting past the moon (styles: "CLOUDS" section). -->
 <div class="clouds" id="clouds" aria-hidden="true"></div>
 <!-- Fireflies drifting around the lower part of the page. -->
 <div class="fireflies" id="fireflies" aria-hidden="true"></div>
+<!-- Mist, lanterns and falling leaves / snow / petals (painted by the script). -->
+<canvas id="fx" aria-hidden="true"></canvas>
 
 <!-- Hidden SVG filter that makes the "water" title ripple. It generates
      moving noise (feTurbulence) and uses it to push the text's pixels around
@@ -570,6 +724,9 @@
 
   <p class="footer" id="footer"></p>
 </main>
+
+<!-- Speaker button for the night sounds (SOUND_BUTTON). -->
+<button class="sound-btn" id="sound-btn" type="button" aria-pressed="false" hidden></button>
 
 <script>
   // ===========================================================================
@@ -684,6 +841,125 @@
   const FIREFLY_BLINK  = [2, 5];
   const FIREFLY_AREA   = [0.35, 1];
 
+  // ---------------------------------------------------------------------------
+  // SEASONS
+  // ---------------------------------------------------------------------------
+  // The night scene changes with the season. Each season turns the effects
+  // below up or down (see SEASONS): falling leaves in autumn, snow and northern
+  // lights in winter, blossom petals in spring, fireflies and lanterns in summer.
+  //   SEASON_MODE  "fixed"     always show SEASON
+  //                "calendar"  follow the real season for today's date
+  //                "cycle"     move through all four seasons in turn, blending
+  //                            smoothly from one into the next
+  //   SEASON       the season for "fixed" mode, and the first season in "cycle"
+  //                mode: "spring", "summer", "autumn" or "winter"
+  //   SEASON_SECONDS        "cycle" mode: how long each season lasts
+  //   SEASON_BLEND_SECONDS  "cycle" mode: how long the change-over takes
+  //   HEMISPHERE            "calendar" mode: "north" or "south"
+  const SEASON_MODE = "cycle";
+  const SEASON = "autumn";
+  const SEASON_SECONDS = 90;
+  const SEASON_BLEND_SECONDS = 20;
+  const HEMISPHERE = "north";
+
+  // How strong each effect is in each season: 0 = off, 1 = full strength
+  // (in between = partly; above 1 = even more).
+  //   leaves / snow / petals   falling leaves, snowflakes, blossom petals
+  //   fireflies                the fireflies
+  //   aurora                   northern lights
+  //   mist                     mist along the water
+  //   lanterns                 floating lanterns
+  //   crickets / wind          night sounds (when the sound is turned on)
+  const SEASONS = {
+    spring: { petals: 1, leaves: 0, snow: 0, fireflies: 0.5, aurora: 0.15, mist: 0.7, lanterns: 0.5, crickets: 0.5, wind: 0.3 },
+    summer: { petals: 0, leaves: 0, snow: 0, fireflies: 1,   aurora: 0,    mist: 0.3, lanterns: 1,   crickets: 1,   wind: 0.15 },
+    autumn: { petals: 0, leaves: 1, snow: 0, fireflies: 0.3, aurora: 0.35, mist: 1,   lanterns: 0.4, crickets: 0.6, wind: 0.6 },
+    winter: { petals: 0, leaves: 0, snow: 1, fireflies: 0,   aurora: 1,    mist: 0.5, lanterns: 0.2, crickets: 0,   wind: 1 }
+  };
+
+  // Falling leaves, snow and petals (how much of each: SEASONS above).
+  //   SHOW_WEATHER    true = on, false = off
+  //   WEATHER_AMOUNT  overall amount: 0.5 = half as many, 2 = twice as many
+  //   LEAF_COLORS / PETAL_COLORS   colors to pick from
+  const SHOW_WEATHER = true;
+  const WEATHER_AMOUNT = 1;
+  const LEAF_COLORS  = ["#d9622b", "#e8a33d", "#b8432f", "#c98a2e", "#8f5a2b"];
+  const PETAL_COLORS = ["#f7c6d9", "#f4a7c3", "#fde2ec"];
+
+  // Northern lights: slow green, blue and purple ribbons across the sky.
+  // Colors: --aurora-1/2/3 in the COLORS block.
+  const SHOW_AURORA = true;
+
+  // Mist drifting along the water. Color: --mist in the COLORS block.
+  const SHOW_MIST = true;
+
+  // Floating lanterns rising from the water into the sky.
+  //   LANTERN_EVERY  seconds between lanterns at full strength [shortest, longest]
+  // Color: --lantern in the COLORS block.
+  const SHOW_LANTERNS = true;
+  const LANTERN_EVERY = [2, 5];
+
+  // Constellations (Big Dipper, Cassiopeia, Orion). Their connecting lines
+  // slowly fade in and out; CONSTELLATION_SECONDS = one fade in + out.
+  // Color: --constellation in the COLORS block.
+  const SHOW_CONSTELLATIONS = true;
+  const CONSTELLATION_SECONDS = 24;
+
+  // Hills and a line of pine trees on the far shore, reflected in the water.
+  //   HILL_HEIGHT  how tall the hills are, as a share of the screen height
+  // Colors: --land and --land-far in the COLORS block.
+  const SHOW_HILLS = true;
+  const HILL_HEIGHT = 0.1;
+
+  // ---------------------------------------------------------------------------
+  // THE COUNTDOWN ITSELF
+  // ---------------------------------------------------------------------------
+  // Milestones: as the countdown passes each one, a message appears at the
+  // top and a burst of stars flies out of the clock.
+  // Each line is [seconds left, message]. 86400 = one day, 3600 = one hour.
+  const MILESTONES = [
+    [30 * 86400, "30 days to go!"],
+    [7 * 86400,  "One week to go!"],
+    [86400,      "One day to go!"],
+    [3600,       "One hour to go!"],
+    [60,         "One minute to go!"]
+  ];
+
+  // Last 10 seconds: the clock grows and pulses with every second.
+  const FINAL_COUNTDOWN = true;
+
+  // At zero: fireworks, and the moon turns full, grows and glows brightly.
+  // (Confetti settings are further down.)
+  const FINISH_FIREWORKS = true;
+  const FIREWORKS_SECONDS = 15;
+  const FIREWORK_COLORS = ["#ffd23f", "#ff8a3d", "#ff4f79", "#3ec1d3", "#b28dff", "#7bd389"];
+  const FINISH_MOON_SWELL = true;
+
+  // Progress ring around the moon: fills in from PROGRESS_START (same format
+  // as TARGET) until the countdown ends. Color: --ring in the COLORS block.
+  const SHOW_PROGRESS_RING = true;
+  const PROGRESS_START = "2026-09-27T00:00:00-04:00";
+
+  // ---------------------------------------------------------------------------
+  // INTERACTIVE
+  // ---------------------------------------------------------------------------
+  //   POINTER_TRAIL        sparkles follow the mouse, and burst where you tap
+  //   CLICK_SHOOTING_STAR  clicking or tapping launches a shooting star
+  //   PARALLAX             moon, clouds, stars and hills shift a little with
+  //                        the mouse (or when a phone is tilted), for depth
+  //   PARALLAX_STRENGTH    1 = normal, 2 = twice as much, 0.5 = half
+  const POINTER_TRAIL = true;
+  const CLICK_SHOOTING_STAR = true;
+  const PARALLAX = true;
+  const PARALLAX_STRENGTH = 1;
+
+  // Night sounds: crickets and wind, which change with the season. Nothing
+  // plays until the viewer presses the speaker button in the bottom corner.
+  //   SOUND_BUTTON  true = show the button, false = no sound at all
+  //   SOUND_VOLUME  0 (silent) to 1 (full)
+  const SOUND_BUTTON = true;
+  const SOUND_VOLUME = 0.6;
+
   // Small text above the date line.
   const HEADING = "Counting down to";
 
@@ -702,7 +978,14 @@
   // Everything below runs the clock. You normally won't need to edit it.
   // ===========================================================================
 
-  const target = new Date(TARGET);
+  // Previews: #final, #finish, #milestone or a season name at the end of the
+  // page address shows that effect without waiting (see the top of the file).
+  const PREVIEW = decodeURIComponent(location.hash.slice(1)).toLowerCase();
+  let target = new Date(TARGET);
+  if (PREVIEW === "final") target = new Date(Date.now() + 15000);
+  if (PREVIEW === "finish") target = new Date(Date.now() + 3000);
+  let seasonMode = SEASON_MODE, seasonFixed = SEASON;
+  if (["spring", "summer", "autumn", "winter"].includes(PREVIEW)) { seasonMode = "fixed"; seasonFixed = PREVIEW; }
 
   // --- Fill in the fixed text from SETTINGS -----------------------------------
   const titleEl = document.getElementById("title");
@@ -725,6 +1008,17 @@
   // A 4-point star shape (24x24 drawing, scaled by CSS).
   const STAR = '<svg viewBox="0 0 24 24"><path d="M12 0C13 8 16 11 24 12C16 13 13 16 12 24C11 16 8 13 0 12C8 11 11 8 12 0Z"/></svg>';
   const rand = (min, max) => min + Math.random() * (max - min);
+  const pick = list => list[Math.floor(Math.random() * list.length)];
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const root = document.documentElement;
+  // false for viewers who turned on "reduce motion" in their device settings
+  const motionOK = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Is the page currently using the dark colors?
+  function isDark() {
+    if (root.dataset.theme === "dark") return true;
+    if (root.dataset.theme === "light") return false;
+    return !matchMedia("(prefers-color-scheme: light)").matches;
+  }
 
   // Moves a star to a random spot with a random size.
   function placeStar(star) {
@@ -808,8 +1102,11 @@
   const footer = document.getElementById("footer");
   let finished = false;
 
+  let lastLeft = null;                         // seconds left at the previous tick
+
   // Runs once per second: works out the time left and updates the cards.
   function tick() {
+    updateRing();
     const diff = target - Date.now();          // milliseconds remaining
     if (diff <= 0) {
       if (!finished) finish();
@@ -822,6 +1119,12 @@
     render("seconds", s % 60,                    2);
     // Footer line under the clock. Edit the text between the backticks to change it.
     footer.textContent = `${Math.floor(s / 3600).toLocaleString()} hours · ${s.toLocaleString()} seconds to go`;
+    // Milestones: celebrate any the countdown has just passed.
+    if (lastLeft !== null) {
+      for (const [secs, text] of MILESTONES) if (lastLeft > secs && s <= secs) celebrate(text);
+    }
+    lastLeft = s;
+    finalSecond(s);
   }
 
   // Runs once when the countdown reaches zero.
@@ -829,7 +1132,14 @@
     finished = true;
     document.body.classList.add("finished");   // hides clock, shows DONE_MESSAGE
     footer.textContent = ENDED_MESSAGE;
+    document.body.classList.remove("final");
     if (CONFETTI_ENABLED) confetti();
+    if (FINISH_FIREWORKS && motionOK) startFireworks(FIREWORKS_SECONDS);
+    if (FINISH_MOON_SWELL && SHOW_MOON) {        // full moon, bigger and brighter
+      moonFinale = true;
+      setMoonPhase(0.5);
+      moonEl.classList.add("finale");
+    }
   }
 
   // Schedules each tick right at the start of the next second, so the
@@ -838,11 +1148,13 @@
     tick();
     if (!finished) setTimeout(schedule, 1000 - (Date.now() % 1000) + 5);
   }
-  schedule();
+  // (schedule() is started at the very end of the script, once everything
+  // it uses has been set up.)
 
   // --- Full moon --------------------------------------------------------------
   const moonEl = document.getElementById("moon");
   const moonShadow = document.getElementById("moon-shadow");
+  let moonFinale = false;                      // true once the countdown ends
 
   // Draws the moon at phase p, where 0 = new, 0.25 = first quarter (right half
   // lit), 0.5 = full, 0.75 = last quarter (left half lit), 1 = new again.
@@ -872,16 +1184,16 @@
     const moonStart = performance.now();
     (function moonFrame(now) {
       // Start at full (0.5) and move forward: full → waning → new → waxing → full.
-      setMoonPhase((0.5 + (now - moonStart) / (MOON_CYCLE_SECONDS * 1000)) % 1);
+      setMoonPhase(moonFinale ? 0.5 : (0.5 + (now - moonStart) / (MOON_CYCLE_SECONDS * 1000)) % 1);
       requestAnimationFrame(moonFrame);
     })(moonStart);
   } else {
     setMoonPhase(0.5);                               // always full
   }
 
-  // --- Starfield and water ----------------------------------------------------
-  // Both are painted on the #scene canvas, redrawn every frame so the stars can
-  // twinkle and the moonlight can shimmer on the water.
+  // --- Starfield, northern lights, constellations, hills and water ------------
+  // All painted on the #scene canvas (back to front: northern lights, stars,
+  // constellations, hills, water), redrawn every frame so things can move.
   const scene = document.getElementById("scene");
   const sctx = scene.getContext("2d");
   const sceneMotion = !matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -889,9 +1201,14 @@
 
   // Reads the current theme's colors from the COLORS block.
   function readSceneColors() {
-    const cs = getComputedStyle(document.documentElement);
+    const cs = getComputedStyle(root);
     const v = name => cs.getPropertyValue(name).trim();
-    colors = { star: v("--star"), top: v("--water-top"), bottom: v("--water-bottom"), light: v("--moonlight") };
+    colors = {
+      star: v("--star"), top: v("--water-top"), bottom: v("--water-bottom"), light: v("--moonlight"),
+      land: v("--land"), landFar: v("--land-far"), snow: v("--snow"), mist: v("--mist"),
+      lantern: v("--lantern"), au1: v("--aurora-1"), au2: v("--aurora-2"), au3: v("--aurora-3"),
+      con: v("--constellation"), twinkle: v("--twinkle"), title2: v("--title-2")
+    };
   }
 
   // Sizes the canvas to the window (sharp on high-resolution screens) and
@@ -917,9 +1234,153 @@
         phase: rand(0, 2 * Math.PI)
       };
     });
+    if (SHOW_HILLS) buildHills();
+    if (SHOW_CONSTELLATIONS) buildConstellations();
+  }
+
+  // --- Hills and trees ---
+  let hillBack = null, hillFront = null;
+  // Makes the outline of the far hills, and a nearer ridge lined with pines.
+  function buildHills() {
+    const hh = H * HILL_HEIGHT, m = 60;              // m = extra width for parallax
+    const a = rand(0, 6), b = rand(0, 6), c = rand(0, 6);
+    hillBack = new Path2D();
+    hillBack.moveTo(-m, horizon);
+    for (let x = -m; x <= W + m; x += 8) {
+      hillBack.lineTo(x, horizon - hh * (0.5 + 0.3 * Math.sin(x * 0.004 + a) + 0.2 * Math.sin(x * 0.013 + b)));
+    }
+    hillBack.lineTo(W + m, horizon);
+    hillBack.closePath();
+    const ridge = x => horizon - hh * 0.28 * (0.6 + 0.4 * Math.sin(x * 0.006 + c));
+    hillFront = new Path2D();
+    hillFront.moveTo(-m, horizon);
+    for (let x = -m; x <= W + m; x += 6) hillFront.lineTo(x, ridge(x));
+    hillFront.lineTo(W + m, horizon);
+    hillFront.closePath();
+    // pine trees along the ridge: one thin triangle each, with a few gaps
+    const k = clamp(H / 800, 0.6, 1.2);
+    for (let x = -m; x < W + m; x += rand(5, 14) * k) {
+      if (Math.random() < 0.15) continue;
+      const h = rand(10, 30) * k, w = h * rand(0.3, 0.45), y = ridge(x) + 3;
+      hillFront.moveTo(x - w / 2, y);
+      hillFront.lineTo(x, y - h);
+      hillFront.lineTo(x + w / 2, y);
+      hillFront.closePath();
+    }
+  }
+
+  // Paints the hills; in winter they get a dusting of snow.
+  function drawHills(S) {
+    const PS = PARALLAX_STRENGTH, snow = S.weights.winter;
+    const layer = (path, dx, color, snowAlpha) => {
+      sctx.save();
+      sctx.translate(dx, 0);
+      sctx.fillStyle = color;
+      sctx.fill(path);
+      if (snowAlpha > 0.005) {
+        sctx.globalAlpha = snowAlpha;
+        sctx.fillStyle = `rgb(${colors.snow})`;
+        sctx.fill(path);
+      }
+      sctx.restore();
+    };
+    layer(hillBack, -parX * 8 * PS, colors.landFar, 0.18 * snow);   // far hills move less
+    layer(hillFront, -parX * 14 * PS, colors.land, 0.1 * snow);     // near ridge moves more
+  }
+
+  // --- Constellations ---
+  // Each star pattern: where it sits (x, y as a share of the sky), its size,
+  // its stars (points inside a 1 x 1 box) and which stars are joined by lines.
+  const CONSTELLATIONS = [
+    { x: 0.05, y: 0.08, size: 0.26,                  // Big Dipper
+      pts: [[0, .3], [.2, .26], [.36, .34], [.5, .42], [.54, .68], [.82, .76], [.88, .48]],
+      lines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 3]] },
+    { x: 0.58, y: 0.03, size: 0.15,                  // Cassiopeia
+      pts: [[0, .2], [.25, .7], [.5, .42], [.75, .8], [1, .3]],
+      lines: [[0, 1], [1, 2], [2, 3], [3, 4]] },
+    { x: 0.07, y: 0.5, size: 0.2,                    // Orion
+      pts: [[.2, 0], [.8, .06], [.42, .46], [.5, .48], [.58, .5], [.28, .96], [.82, .9]],
+      lines: [[0, 1], [0, 2], [1, 4], [2, 3], [3, 4], [2, 5], [4, 6]] }
+  ];
+  let cons = [];
+  function buildConstellations() {
+    const unit = Math.min(W, horizon * 1.4);
+    cons = CONSTELLATIONS.map(c => ({
+      lines: c.lines,
+      pts: c.pts.map(([px, py]) => [c.x * W + px * c.size * unit, c.y * horizon + py * c.size * unit])
+    }));
+  }
+  function drawConstellations(t) {
+    const ox = -parX * 6 * PARALLAX_STRENGTH, oy = -parY * 4 * PARALLAX_STRENGTH;
+    cons.forEach((c, i) => {
+      // lines fade in and out; each constellation on its own schedule
+      const wave = 0.5 + 0.5 * Math.sin(t * 2 * Math.PI / CONSTELLATION_SECONDS + i * 2.1);
+      const lines = wave * wave * (3 - 2 * wave);
+      sctx.strokeStyle = `rgba(${colors.con}, ${(0.3 * lines).toFixed(3)})`;
+      sctx.lineWidth = 1;
+      sctx.beginPath();
+      for (const [a, b] of c.lines) {
+        sctx.moveTo(c.pts[a][0] + ox, c.pts[a][1] + oy);
+        sctx.lineTo(c.pts[b][0] + ox, c.pts[b][1] + oy);
+      }
+      sctx.stroke();
+      // the stars themselves are always showing, a little brighter with the lines
+      sctx.fillStyle = `rgba(${colors.con}, ${(0.6 + 0.35 * lines).toFixed(3)})`;
+      sctx.shadowColor = `rgb(${colors.con})`;
+      sctx.shadowBlur = 5;
+      for (const [x, y] of c.pts) {
+        sctx.beginPath(); sctx.arc(x + ox, y + oy, 1.6, 0, 2 * Math.PI); sctx.fill();
+      }
+      sctx.shadowBlur = 0;
+    });
+  }
+
+  // --- Northern lights ---
+  // Drawn small on a hidden canvas, then stretched over the sky: stretching
+  // blurs it, which gives the soft glow.
+  const aur = document.createElement("canvas");
+  aur.width = 160; aur.height = 90;
+  const actx = aur.getContext("2d");
+  function drawAurora(t, amount) {
+    const w = aur.width, h = aur.height, dark = isDark();
+    const strength = amount * (dark ? 1 : 0.55);
+    actx.clearRect(0, 0, w, h);
+    actx.lineWidth = 5;
+    for (let i = 0; i < 3; i++) {                    // three ribbons
+      const a = strength * (0.55 - i * 0.12) * (0.75 + 0.25 * Math.sin(t * 0.35 + i * 2));
+      if (a <= 0) continue;
+      const g = actx.createLinearGradient(0, 0, w, 0);
+      g.addColorStop(0,   `rgba(${colors.au1}, 0)`);
+      g.addColorStop(0.2, `rgba(${colors.au1}, ${a})`);
+      g.addColorStop(0.5, `rgba(${colors.au2}, ${a * 0.9})`);
+      g.addColorStop(0.8, `rgba(${colors.au3}, ${a})`);
+      g.addColorStop(1,   `rgba(${colors.au3}, 0)`);
+      actx.strokeStyle = g;
+      // the ribbon, then fainter copies hanging below it like curtains
+      for (let k = 0; k < 6; k++) {
+        actx.globalAlpha = k === 0 ? 1 : (1 - k / 6) * 0.5;
+        actx.beginPath();
+        for (let x = 0; x <= w; x += 4) {
+          const y = h * (0.25 + 0.14 * i) + k * 3
+            + Math.sin(x * 0.06 + t * 0.3 + i * 1.7) * h * 0.07
+            + Math.sin(x * 0.021 - t * 0.12 + i * 2.3) * h * 0.1;
+          if (x === 0) actx.moveTo(x, y); else actx.lineTo(x, y);
+        }
+        actx.stroke();
+      }
+    }
+    actx.globalAlpha = 1;
+    sctx.save();
+    sctx.globalCompositeOperation = dark ? "lighter" : "source-over";
+    sctx.imageSmoothingEnabled = true;
+    sctx.imageSmoothingQuality = "high";
+    sctx.drawImage(aur, -parX * 3 * PARALLAX_STRENGTH - 20, 0, W + 40, horizon * 0.6);
+    sctx.restore();
   }
 
   function drawStars(t) {
+    sctx.save();
+    sctx.translate(-parX * 6 * PARALLAX_STRENGTH, -parY * 4 * PARALLAX_STRENGTH);   // parallax
     sctx.fillStyle = colors.star;
     sctx.shadowColor = colors.star;
     for (const s of stars) {
@@ -930,8 +1391,7 @@
       sctx.arc(s.x, s.y, s.r, 0, 2 * Math.PI);
       sctx.fill();
     }
-    sctx.globalAlpha = 1;
-    sctx.shadowBlur = 0;
+    sctx.restore();
   }
 
   function drawWater(t) {
@@ -942,6 +1402,18 @@
     g.addColorStop(1, colors.bottom);
     sctx.fillStyle = g;
     sctx.fillRect(0, horizon, W, depth);
+    // The hills reflected upside down in the water.
+    if (SHOW_HILLS && hillBack) {
+      sctx.save();
+      sctx.beginPath(); sctx.rect(0, horizon, W, depth); sctx.clip();
+      sctx.translate(0, 2 * horizon); sctx.scale(1, -1);       // mirror at the horizon
+      sctx.globalAlpha = 0.35;
+      sctx.fillStyle = colors.landFar;
+      sctx.save(); sctx.translate(-parX * 8 * PARALLAX_STRENGTH, 0); sctx.fill(hillBack); sctx.restore();
+      sctx.fillStyle = colors.land;
+      sctx.translate(-parX * 14 * PARALLAX_STRENGTH, 0); sctx.fill(hillFront);
+      sctx.restore();
+    }
     // Faint line of light along the horizon.
     sctx.fillStyle = `rgba(${colors.light}, .18)`;
     sctx.fillRect(0, horizon, W, 1);
@@ -984,22 +1456,24 @@
 
   function drawScene(now) {
     const t = now / 1000;                            // seconds
+    const S = season(now);                           // how strong each seasonal effect is
     sctx.clearRect(0, 0, W, H);
+    if (SHOW_AURORA && S.aurora > 0.01) drawAurora(t, S.aurora);
     if (SHOW_STARS) drawStars(t);
+    if (SHOW_CONSTELLATIONS) drawConstellations(t);
+    if (SHOW_HILLS) drawHills(S);
     if (SHOW_WATER) drawWater(t);
     if (sceneMotion) requestAnimationFrame(drawScene);
   }
 
-  if (SHOW_STARS || SHOW_WATER) {
-    readSceneColors();
-    resizeScene();
-    addEventListener("resize", () => { resizeScene(); if (!sceneMotion) drawScene(0); });
-    // Switch colors if the device changes between light and dark mode.
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-      readSceneColors(); if (!sceneMotion) drawScene(0);
-    });
-    requestAnimationFrame(drawScene);                // with reduced motion: drawn once, still
-  }
+  readSceneColors();
+  resizeScene();
+  addEventListener("resize", () => { resizeScene(); if (!sceneMotion) drawScene(0); });
+  // Switch colors if the device changes between light and dark mode.
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    readSceneColors(); if (!sceneMotion) drawScene(0);
+  });
+  requestAnimationFrame(drawScene);                  // with reduced motion: drawn once, still
 
   // --- Clouds -----------------------------------------------------------------
   // Gives a cloud a random height (within the band around the moon) and size.
@@ -1066,9 +1540,9 @@
   // --- Shooting stars ---------------------------------------------------------
   const sky = document.getElementById("sky");
 
-  // Launches one shooting star from a random spot in the top half of the
-  // screen, heading down-right or down-left at a shallow angle.
-  function shootStar() {
+  // Launches one shooting star from x, y (or, without them, a random spot in
+  // the top half of the screen), heading down-right or down-left.
+  function shootStar(x, y) {
     const star = document.createElement("div");
     star.className = "shooting-star";
     const len = rand(SHOOTING_STAR_LENGTH[0], SHOOTING_STAR_LENGTH[1]);
@@ -1076,8 +1550,8 @@
     const angle = Math.random() < 0.5 ? tilt : 180 - tilt;  // left→right or right→left
     const travel = rand(0.35, 0.6) * Math.max(innerWidth, innerHeight);  // pixels flown
     star.style.width = len + "px";
-    star.style.left = rand(0.1, 0.9) * innerWidth + "px";
-    star.style.top = rand(0, 0.5) * innerHeight + "px";
+    star.style.left = (x ?? rand(0.1, 0.9) * innerWidth) + "px";
+    star.style.top = (y ?? rand(0, 0.5) * innerHeight) + "px";
     sky.appendChild(star);
     // Fade in quickly, fly along the angle, fade out, then remove the element.
     star.animate([
@@ -1099,6 +1573,515 @@
   if (SHOOTING_STARS && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
     setTimeout(scheduleShootingStar, 1000);   // first star 1s after the page opens
   }
+
+  // ===========================================================================
+  // SEASONS
+  // Works out how much of each season is showing, and from that how strong
+  // each seasonal effect should be right now.
+  // ===========================================================================
+  const SEASON_NAMES = ["spring", "summer", "autumn", "winter"];
+  const SEASON_KEYS = ["petals", "leaves", "snow", "fireflies", "aurora", "mist", "lanterns", "crickets", "wind"];
+  const seasonStart = performance.now();
+
+  // Share of each season showing right now (they add up to 1). In "cycle"
+  // mode, two seasons overlap while one blends into the next.
+  function seasonWeights(now) {
+    const w = { spring: 0, summer: 0, autumn: 0, winter: 0 };
+    if (seasonMode === "calendar") {
+      const month = new Date().getMonth();           // 0 = January
+      const north = ["winter", "winter", "spring", "spring", "spring", "summer",
+                     "summer", "summer", "autumn", "autumn", "autumn", "winter"][month];
+      const opposite = { spring: "autumn", summer: "winter", autumn: "spring", winter: "summer" };
+      w[HEMISPHERE === "south" ? opposite[north] : north] = 1;
+    } else if (seasonMode === "cycle") {
+      const first = Math.max(0, SEASON_NAMES.indexOf(seasonFixed));
+      const elapsed = (now - seasonStart) / 1000;
+      const n = Math.floor(elapsed / SEASON_SECONDS);      // seasons completed so far
+      const into = elapsed - n * SEASON_SECONDS;           // seconds into this season
+      const current = SEASON_NAMES[(first + n) % 4];
+      const next = SEASON_NAMES[(first + n + 1) % 4];
+      const blend = clamp((into - (SEASON_SECONDS - SEASON_BLEND_SECONDS)) / SEASON_BLEND_SECONDS, 0, 1);
+      const smooth = blend * blend * (3 - 2 * blend);      // ease in and out
+      w[current] += 1 - smooth;
+      w[next] += smooth;
+    } else {
+      w[SEASON_NAMES.includes(seasonFixed) ? seasonFixed : "autumn"] = 1;
+    }
+    return w;
+  }
+
+  // Strength of every effect in SEASONS right now, e.g. season().snow.
+  let seasonCache = { t: -1e9, a: null };
+  function season(now = performance.now()) {
+    if (seasonCache.a && Math.abs(now - seasonCache.t) < 30) return seasonCache.a;
+    const w = seasonWeights(now);
+    const a = { weights: w };
+    for (const key of SEASON_KEYS) {
+      a[key] = SEASON_NAMES.reduce((sum, s) => sum + w[s] * ((SEASONS[s] || {})[key] || 0), 0);
+    }
+    seasonCache = { t: now, a };
+    return a;
+  }
+
+  // ===========================================================================
+  // MIST, LANTERNS AND FALLING LEAVES / SNOW / PETALS  (the #fx canvas)
+  // This loop also eases the parallax and fades the fireflies with the season.
+  // ===========================================================================
+  const fx = document.getElementById("fx");
+  const xctx = fx.getContext("2d");
+  const firefliesLayer = document.getElementById("fireflies");
+  let weather = [], lanterns = [], mists = [];
+  let parX = 0, parY = 0, parTargetX = 0, parTargetY = 0;   // parallax, -1 .. 1
+
+  // Where the water starts (or near the bottom when there is no water).
+  const waterLine = () => innerHeight * (1 - (SHOW_WATER ? WATER_HEIGHT : 0.12));
+  // Makes things a bit smaller on phones and a bit bigger on large screens.
+  const sizeScale = () => clamp(Math.min(innerWidth, innerHeight) / 800, 0.6, 1.3);
+
+  // Sizes a canvas to the window, sharp on high-resolution screens.
+  function sizeCanvas(c, ctx) {
+    const dpr = window.devicePixelRatio || 1;
+    c.width = innerWidth * dpr; c.height = innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // --- Mist: long soft ovals drifting slowly to the right along the water ---
+  function makeMist(anywhere) {
+    const k = sizeScale(), rx = rand(180, 380) * k;
+    return {
+      x: anywhere ? rand(-rx, innerWidth + rx) : -rx,
+      y: rand(waterLine() - innerHeight * 0.05, innerHeight),
+      rx, ry: rand(18, 42) * k,
+      speed: rand(6, 16),                            // pixels per second
+      strength: rand(0.5, 1)
+    };
+  }
+  function drawMist(dt, amount) {
+    if (amount < 0.01) return;
+    for (const m of mists) {
+      m.x += m.speed * dt;
+      if (m.x - m.rx > innerWidth) Object.assign(m, makeMist(false));
+      xctx.save();
+      xctx.translate(m.x, m.y);
+      xctx.scale(m.rx / m.ry, 1);                    // stretch a circle into a long oval
+      const g = xctx.createRadialGradient(0, 0, 0, 0, 0, m.ry);
+      g.addColorStop(0, `rgba(${colors.mist}, ${(0.18 * amount * m.strength).toFixed(3)})`);
+      g.addColorStop(1, `rgba(${colors.mist}, 0)`);
+      xctx.fillStyle = g;
+      xctx.fillRect(-m.ry, -m.ry, m.ry * 2, m.ry * 2);
+      xctx.restore();
+    }
+  }
+
+  // --- Lanterns: launched from the water, rising and swaying, fading high up ---
+  function updateLanterns(dt, amount) {
+    const mean = (LANTERN_EVERY[0] + LANTERN_EVERY[1]) / 2;
+    if (lanterns.length < 14 && Math.random() < dt * amount / mean) {
+      const k = sizeScale(), w = rand(9, 15) * k, x = rand(0.05, 0.95) * innerWidth;
+      lanterns.push({
+        x0: x, x, y: waterLine() + rand(0, innerHeight - waterLine()) * 0.5,
+        w, h: w * 1.3, vy: -rand(14, 26) * k, sway: rand(6, 16), phase: rand(0, 6.3), t: 0
+      });
+    }
+    const glowMode = isDark() ? "lighter" : "source-over";
+    for (const L of lanterns) {
+      L.t += dt;
+      L.y += L.vy * dt;
+      L.x = L.x0 + Math.sin(L.t * 0.8 + L.phase) * L.sway;
+      // fade in when launched; fade out as it nears the top of the sky
+      const a = Math.min(1, L.t / 1.5) * clamp(L.y / (innerHeight * 0.35), 0, 1);
+      if (a <= 0) continue;
+      // warm glow around it
+      xctx.globalCompositeOperation = glowMode;
+      const g = xctx.createRadialGradient(L.x, L.y, 0, L.x, L.y, L.w * 3);
+      g.addColorStop(0, `rgba(${colors.lantern}, ${(0.4 * a).toFixed(3)})`);
+      g.addColorStop(1, `rgba(${colors.lantern}, 0)`);
+      xctx.fillStyle = g;
+      xctx.fillRect(L.x - L.w * 3, L.y - L.w * 3, L.w * 6, L.w * 6);
+      xctx.globalCompositeOperation = "source-over";
+      // paper body: brightest at the bottom, where the flame is
+      const body = xctx.createLinearGradient(0, L.y - L.h / 2, 0, L.y + L.h / 2);
+      body.addColorStop(0, `rgba(${colors.lantern}, ${(0.55 * a).toFixed(3)})`);
+      body.addColorStop(1, `rgba(255, 236, 190, ${(0.95 * a).toFixed(3)})`);
+      xctx.fillStyle = body;
+      xctx.beginPath();
+      if (xctx.roundRect) xctx.roundRect(L.x - L.w / 2, L.y - L.h / 2, L.w, L.h, L.w * 0.3);
+      else xctx.rect(L.x - L.w / 2, L.y - L.h / 2, L.w, L.h);
+      xctx.fill();
+    }
+    lanterns = lanterns.filter(L => L.y > -40);
+  }
+
+  // --- Falling leaves, snowflakes and petals ---
+  // How many start falling each second at full season strength, on a
+  // 1280px-wide screen (narrower screens get proportionally fewer).
+  const WEATHER_RATE = { leaves: 2.2, snow: 14, petals: 3 };
+
+  function spawnWeather(type) {
+    const k = sizeScale();
+    const p = { type, x0: rand(-0.1, 1.1) * innerWidth, y: -20, t: 0, phase: rand(0, 6.3), rot: rand(0, 6.3) };
+    if (type === "leaves") Object.assign(p, {
+      size: rand(9, 15) * k, vy: rand(30, 60) * k, vx: rand(5, 30),        // falls, drifts right
+      sway: rand(15, 35), swaySpeed: rand(0.8, 1.6), spin: rand(-1.5, 1.5), flipSpeed: rand(1.5, 3.5),
+      color: pick(LEAF_COLORS) });
+    if (type === "petals") Object.assign(p, {
+      size: rand(4, 7) * k, vy: rand(18, 38) * k, vx: rand(5, 25),
+      sway: rand(10, 25), swaySpeed: rand(0.8, 1.8), spin: rand(-2, 2), flipSpeed: rand(2, 4),
+      color: pick(PETAL_COLORS) });
+    if (type === "snow") Object.assign(p, {
+      size: rand(1, 3.2) * k, vy: rand(30, 65) * k, vx: rand(-5, 10),
+      sway: rand(5, 15), swaySpeed: rand(0.5, 1.2), alpha: rand(0.55, 0.95) });
+    weather.push(p);
+    return p;
+  }
+
+  // Fills the screen with already-falling pieces, so the page doesn't open
+  // with an empty sky while the first ones fall from the top.
+  function prefillWeather() {
+    const S = season(), widthScale = innerWidth / 1280;
+    const crossing = { leaves: 45, snow: 48, petals: 28 };   // typical fall speed, px/s
+    for (const type of ["leaves", "snow", "petals"]) {
+      const n = WEATHER_RATE[type] * S[type] * WEATHER_AMOUNT * widthScale * innerHeight / (crossing[type] * sizeScale());
+      for (let i = 0; i < n && weather.length < 500; i++) {
+        const p = spawnWeather(type);
+        p.y = rand(-20, innerHeight);
+        p.t = rand(0, 10);
+      }
+    }
+  }
+
+  function updateWeather(dt, S) {
+    const widthScale = innerWidth / 1280;
+    for (const type of ["leaves", "snow", "petals"]) {
+      let expected = WEATHER_RATE[type] * S[type] * WEATHER_AMOUNT * widthScale * dt;
+      while (weather.length < 500 && Math.random() < expected) { spawnWeather(type); expected -= 1; }
+    }
+    for (const p of weather) {
+      p.t += dt;
+      p.y += p.vy * dt;
+      p.x0 += p.vx * dt;
+      const x = p.x0 + Math.sin(p.t * p.swaySpeed + p.phase) * p.sway;   // side-to-side sway
+      if (p.type === "snow") {
+        xctx.fillStyle = `rgba(${colors.snow}, ${p.alpha})`;
+        xctx.beginPath(); xctx.arc(x, p.y, p.size, 0, 2 * Math.PI); xctx.fill();
+        continue;
+      }
+      // leaves and petals spin, and squash sideways as if tumbling over
+      p.rot += p.spin * dt;
+      const flip = Math.cos(p.t * p.flipSpeed + p.phase);
+      xctx.save();
+      xctx.translate(x, p.y);
+      xctx.rotate(p.rot);
+      xctx.scale(Math.abs(flip) < 0.15 ? 0.15 : Math.abs(flip), 1);
+      xctx.globalAlpha = 0.9;
+      xctx.fillStyle = p.color;
+      xctx.beginPath();
+      if (p.type === "leaves") {
+        const s = p.size;                            // pointed leaf...
+        xctx.moveTo(0, -s);
+        xctx.quadraticCurveTo(s * 0.75, -s * 0.2, 0, s);
+        xctx.quadraticCurveTo(-s * 0.75, -s * 0.2, 0, -s);
+        xctx.fill();
+        xctx.strokeStyle = "rgba(60, 30, 10, .45)"; // ...with a stem down the middle
+        xctx.lineWidth = 1;
+        xctx.beginPath(); xctx.moveTo(0, -s * 0.8); xctx.lineTo(0, s * 1.25); xctx.stroke();
+      } else {
+        xctx.ellipse(0, 0, p.size, p.size * 0.6, 0, 0, 2 * Math.PI);   // petal
+        xctx.fill();
+      }
+      xctx.restore();
+    }
+    weather = weather.filter(p => p.y < innerHeight + 30 && p.x0 > -200 && p.x0 < innerWidth + 200);
+  }
+
+  let fxLast = performance.now();
+  function fxFrame(now) {
+    const dt = Math.min((now - fxLast) / 1000, 0.1);
+    fxLast = now;
+    const S = season(now);
+    // Parallax: ease toward where the mouse (or phone tilt) points.
+    parX += (parTargetX - parX) * Math.min(1, dt * 2.5);
+    parY += (parTargetY - parY) * Math.min(1, dt * 2.5);
+    root.style.setProperty("--px", (parX * PARALLAX_STRENGTH).toFixed(3));
+    root.style.setProperty("--py", (parY * PARALLAX_STRENGTH).toFixed(3));
+    // Fireflies come and go with the season.
+    firefliesLayer.style.opacity = Math.min(1, S.fireflies).toFixed(3);
+    xctx.clearRect(0, 0, innerWidth, innerHeight);
+    if (SHOW_MIST) drawMist(dt, S.mist);
+    if (SHOW_LANTERNS) updateLanterns(dt, S.lanterns);
+    if (SHOW_WEATHER) updateWeather(dt, S);
+    requestAnimationFrame(fxFrame);
+  }
+
+  function resetFx() {
+    sizeCanvas(fx, xctx);
+    mists = Array.from({ length: 7 }, () => makeMist(true));
+    if (!motionOK && SHOW_MIST) drawMist(0, season().mist);   // still mist, nothing moving
+  }
+  resetFx();
+  addEventListener("resize", resetFx);
+  if (motionOK) {
+    if (SHOW_WEATHER) prefillWeather();
+    requestAnimationFrame(fxFrame);
+  }
+
+  // ===========================================================================
+  // FIREWORKS, STAR BURSTS AND POINTER SPARKLES  (the #front canvas, in front
+  // of everything). This loop only runs while something is showing.
+  // ===========================================================================
+  const front = document.getElementById("front");
+  const fctx = front.getContext("2d");
+  let sparks = [], rockets = [], fireworksUntil = 0, frontRunning = false, frontLast = 0;
+  sizeCanvas(front, fctx);
+  addEventListener("resize", () => sizeCanvas(front, fctx));
+
+  // One glowing spark. star = draw it as a 4-point star instead of a dot.
+  function addSpark(x, y, vx, vy, color, life, size, gravity, star) {
+    sparks.push({ x, y, vx, vy, color, life, max: life, size, gravity, star });
+    wakeFront();
+  }
+  // Many sparks flying out in all directions from one point.
+  function burst(x, y, count, palette, speed = [60, 260], stars = false) {
+    for (let i = 0; i < count; i++) {
+      const angle = rand(0, 2 * Math.PI), v = rand(speed[0], speed[1]);
+      addSpark(x, y, Math.cos(angle) * v, Math.sin(angle) * v, pick(palette),
+               rand(1.2, 2.2), rand(1.6, 3), 70, stars && Math.random() < 0.4);
+    }
+  }
+  // A firework rocket: climbs from the bottom, then bursts.
+  function launchRocket() {
+    rockets.push({
+      x: rand(0.15, 0.85) * innerWidth, y: innerHeight, vx: rand(-40, 40),
+      vy: -rand(430, 580) * Math.sqrt(innerHeight / 800),
+      top: rand(0.12, 0.45) * innerHeight,           // where it bursts
+      color: pick(FIREWORK_COLORS)
+    });
+    wakeFront();
+  }
+  function startFireworks(seconds) { fireworksUntil = performance.now() + seconds * 1000; wakeFront(); }
+
+  function wakeFront() {
+    if (frontRunning) return;
+    frontRunning = true;
+    frontLast = performance.now();
+    requestAnimationFrame(frontFrame);
+  }
+  function drawStarShape(ctx, x, y, r) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.quadraticCurveTo(x, y, x, y + r);
+    ctx.quadraticCurveTo(x, y, x - r, y);
+    ctx.quadraticCurveTo(x, y, x, y - r);
+    ctx.fill();
+  }
+  function frontFrame(now) {
+    const dt = Math.min((now - frontLast) / 1000, 0.05);
+    frontLast = now;
+    fctx.clearRect(0, 0, innerWidth, innerHeight);
+    if (now < fireworksUntil && Math.random() < dt * 1.8) launchRocket();   // ~2 a second
+    fctx.globalCompositeOperation = isDark() ? "lighter" : "source-over";
+    for (const r of rockets) {
+      r.x += r.vx * dt; r.y += r.vy * dt; r.vy += 120 * dt;          // slows as it climbs
+      sparks.push({ x: r.x, y: r.y, vx: rand(-15, 15), vy: rand(20, 60), color: r.color,
+                    life: 0.4, max: 0.4, size: 1.2, gravity: 0, star: false });   // its trail
+      if (r.y <= r.top || r.vy >= -40) {
+        burst(r.x, r.y, 110, [r.color, r.color, "#ffffff"], [60, 380]);
+        r.done = true;
+      }
+    }
+    rockets = rockets.filter(r => !r.done);
+    const drag = Math.pow(0.4, dt);                  // sparks slow down as they spread
+    for (const s of sparks) {
+      s.life -= dt;
+      s.vx *= drag;
+      s.vy = s.vy * drag + s.gravity * dt;
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      const a = Math.max(0, s.life / s.max);         // fades out over its life
+      fctx.globalAlpha = a;
+      fctx.fillStyle = s.color;
+      if (s.star) drawStarShape(fctx, s.x, s.y, s.size * 2.5);
+      else { fctx.beginPath(); fctx.arc(s.x, s.y, s.size * (0.5 + 0.5 * a), 0, 2 * Math.PI); fctx.fill(); }
+    }
+    fctx.globalAlpha = 1;
+    fctx.globalCompositeOperation = "source-over";
+    sparks = sparks.filter(s => s.life > 0);
+    if (sparks.length || rockets.length || now < fireworksUntil) requestAnimationFrame(frontFrame);
+    else { frontRunning = false; fctx.clearRect(0, 0, innerWidth, innerHeight); }
+  }
+
+  // ===========================================================================
+  // THE COUNTDOWN ITSELF: milestones, last 10 seconds, progress ring
+  // ===========================================================================
+  const clockEl = document.getElementById("clock");
+
+  // A message in a small pill at the top of the page (fades after 4.5s).
+  function showBanner(text) {
+    const el = document.createElement("div");
+    el.className = "milestone";
+    el.setAttribute("role", "status");
+    el.textContent = text;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 4600);
+  }
+  // A milestone: the message, plus a burst of stars flying out of the clock.
+  function celebrate(text) {
+    showBanner(text);
+    if (!motionOK) return;
+    const r = clockEl.getBoundingClientRect();
+    burst(r.left + r.width / 2, r.top + r.height / 2, 150, FIREWORK_COLORS.concat("#ffffff"), [80, 420], true);
+  }
+  // Last ten seconds: the clock grows, and pulses once every second.
+  function finalSecond(secondsLeft) {
+    const on = FINAL_COUNTDOWN && secondsLeft <= 10;
+    document.body.classList.toggle("final", on);
+    if (!on) return;
+    clockEl.classList.remove("pulse");
+    void clockEl.offsetWidth;                        // restarts the pulse animation
+    clockEl.classList.add("pulse");
+  }
+  // Progress ring: how far along we are from PROGRESS_START to the end.
+  const ringFill = document.getElementById("ring-fill");
+  const progressStart = new Date(PROGRESS_START);
+  function updateRing() {
+    if (!ringFill || !ringFill.isConnected) return;
+    const pct = clamp((Date.now() - progressStart) / (target - progressStart), 0, 1);
+    ringFill.style.strokeDashoffset = (100 - pct * 100).toFixed(2);   // 100 = empty, 0 = full
+  }
+  if (!SHOW_PROGRESS_RING) document.getElementById("moon-ring").remove();
+
+  // ===========================================================================
+  // INTERACTIVE: pointer sparkles, tap for a shooting star, parallax
+  // ===========================================================================
+  let lastTrail = { x: -99, y: -99 };
+  addEventListener("pointermove", e => {
+    if (PARALLAX && motionOK && e.pointerType === "mouse") {
+      parTargetX = (e.clientX / innerWidth - 0.5) * 2;    // -1 (left) .. 1 (right)
+      parTargetY = (e.clientY / innerHeight - 0.5) * 2;   // -1 (top)  .. 1 (bottom)
+    }
+    // a sparkle every 8 pixels or so along the pointer's path
+    if (POINTER_TRAIL && motionOK && Math.hypot(e.clientX - lastTrail.x, e.clientY - lastTrail.y) > 8) {
+      lastTrail = { x: e.clientX, y: e.clientY };
+      addSpark(e.clientX, e.clientY, rand(-20, 20), rand(-30, 10),
+               pick([colors.twinkle, colors.title2, "#ffffff"]), rand(0.5, 0.9), rand(1, 2.2), 40, Math.random() < 0.35);
+    }
+  }, { passive: true });
+  root.addEventListener("mouseleave", () => { parTargetX = parTargetY = 0; });
+
+  addEventListener("pointerdown", e => {
+    if (e.target.closest && e.target.closest("button")) return;   // not the speaker button
+    if (!motionOK) return;
+    if (POINTER_TRAIL) burst(e.clientX, e.clientY, 12, [colors.twinkle, colors.title2, "#ffffff"], [30, 120], true);
+    if (CLICK_SHOOTING_STAR) shootStar(e.clientX, e.clientY);
+  });
+
+  if (PARALLAX && motionOK) {
+    addEventListener("deviceorientation", e => {
+      if (e.gamma == null) return;
+      parTargetX = clamp(e.gamma / 30, -1, 1);            // tilting left / right
+      parTargetY = clamp((e.beta - 45) / 30, -1, 1);      // tilting toward / away (held at ~45°)
+    });
+    // iPhones and iPads ask permission before sharing tilt: ask on the first tap.
+    if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+      addEventListener("pointerdown", () => DeviceOrientationEvent.requestPermission().catch(() => {}), { once: true });
+    }
+  }
+
+  // ===========================================================================
+  // NIGHT SOUNDS: crickets and wind, made in the browser (no sound files).
+  // Nothing plays until the viewer presses the speaker button.
+  // ===========================================================================
+  const soundBtn = document.getElementById("sound-btn");
+  const SPEAKER = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" ' +
+                  'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/>';
+  const ICON_ON  = SPEAKER + '<path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+  const ICON_OFF = SPEAKER + '<path d="m16 9 5 6M21 9l-5 6"/></svg>';
+  let audioCtx = null, master = null;
+
+  function setSoundButton(on) {
+    soundBtn.innerHTML = on ? ICON_ON : ICON_OFF;
+    soundBtn.setAttribute("aria-pressed", String(on));
+    soundBtn.setAttribute("aria-label", on ? "Turn off night sounds" : "Turn on night sounds");
+  }
+
+  function startSound() {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    master = audioCtx.createGain();
+    master.gain.value = SOUND_VOLUME;
+    master.connect(audioCtx.destination);
+
+    // Wind: two seconds of soft rumbling noise, looped, through a filter whose
+    // loudness and brightness drift up and down like gusts.
+    const len = audioCtx.sampleRate * 2;
+    const buffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) { last = (last + 0.02 * rand(-1, 1)) / 1.02; data[i] = last * 3.5; }
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buffer;
+    noise.loop = true;
+    const windFilter = audioCtx.createBiquadFilter();
+    windFilter.type = "lowpass";
+    windFilter.frequency.value = 400;
+    const windGain = audioCtx.createGain();
+    windGain.gain.value = 0;
+    noise.connect(windFilter);
+    windFilter.connect(windGain);
+    windGain.connect(master);
+    noise.start();
+    (function gust() {
+      const S = season(), t = audioCtx.currentTime;
+      windGain.gain.setTargetAtTime((0.05 + 0.4 * S.wind) * rand(0.5, 1), t, 1.5);
+      windFilter.frequency.setTargetAtTime(rand(250, 600 + 600 * S.wind), t, 2);
+      setTimeout(gust, rand(2500, 5000));
+    })();
+
+    // Crickets: every so often (more in summer), a cricket chirps.
+    (function crickets() {
+      if (audioCtx.state === "running" && Math.random() < season().crickets) chirp();
+      setTimeout(crickets, rand(250, 900));
+    })();
+  }
+
+  // One chirp: 2-4 very short high beeps, from a random spot left to right.
+  function chirp() {
+    const t0 = audioCtx.currentTime + 0.02;
+    const osc = audioCtx.createOscillator();
+    osc.frequency.value = rand(4200, 5000);          // this cricket's pitch
+    const g = audioCtx.createGain();
+    g.gain.value = 0;
+    osc.connect(g);
+    if (audioCtx.createStereoPanner) {
+      const pan = audioCtx.createStereoPanner();
+      pan.pan.value = rand(-0.8, 0.8);
+      g.connect(pan);
+      pan.connect(master);
+    } else {
+      g.connect(master);
+    }
+    const pulses = Math.floor(rand(2, 5)), vol = rand(0.015, 0.04);
+    for (let p = 0; p < pulses; p++) {
+      const s = t0 + p * 0.045;
+      g.gain.setValueAtTime(0, s);
+      g.gain.linearRampToValueAtTime(vol, s + 0.008);
+      g.gain.linearRampToValueAtTime(0, s + 0.03);
+    }
+    osc.start(t0);
+    osc.stop(t0 + pulses * 0.045 + 0.05);
+  }
+
+  if (SOUND_BUTTON) {
+    soundBtn.hidden = false;
+    setSoundButton(false);
+    soundBtn.addEventListener("click", () => {
+      if (!audioCtx) { startSound(); setSoundButton(true); return; }
+      if (audioCtx.state === "running") { audioCtx.suspend(); setSoundButton(false); }
+      else { audioCtx.resume(); setSoundButton(true); }
+    });
+  } else {
+    soundBtn.remove();
+  }
+
 
   // --- Confetti ---------------------------------------------------------------
   // Draws falling paper pieces on the full-screen canvas. Skipped for viewers
@@ -1135,6 +2118,13 @@
       if (alive) requestAnimationFrame(frame);
     })(start);
   }
+
+  // ===========================================================================
+  // START
+  // ===========================================================================
+  schedule();                                        // start the countdown
+  if (PREVIEW === "milestone") setTimeout(() => celebrate("One week to go!"), 1200);
+  addEventListener("hashchange", () => location.reload());   // switching previews
 </script>
 </body>
 </html>

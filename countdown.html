@@ -14,6 +14,9 @@
                                          bottom: TARGET
     The time zone                        SETTINGS: TARGET, TARGET_ZONE,
                                          TARGET_ZONE_LABEL
+    The big title ("Reishi's Return")    SETTINGS: TITLE
+    The title animation style            SETTINGS: TITLE_EFFECT
+    Title colors                         COLORS block: --title-*
     The heading ("Counting down to")     SETTINGS: HEADING
     The message shown at zero            SETTINGS: DONE_MESSAGE, ENDED_MESSAGE
     Confetti on/off, duration, colors    SETTINGS: CONFETTI_*
@@ -29,7 +32,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Text shown on the browser tab. -->
-<title>Countdown</title>
+<title>Reishi's Return</title>
 <style>
   /* ==========================================================================
      COLORS
@@ -44,6 +47,10 @@
     --text: #f3f5f8;       /* digits and main text                         */
     --muted: #8a94a6;      /* labels, colons, small text                   */
     --accent: #ff8a3d;     /* highlight color (time in heading, "It's time!") */
+    /* Title colors, used by the title effects (deep → bright → highlight) */
+    --title-1: #0b6e99;
+    --title-2: #3ec1d3;
+    --title-3: #e6fbff;
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
@@ -54,6 +61,9 @@
       --text: #151a22;
       --muted: #5f6878;
       --accent: #e0661a;
+      --title-1: #0a5a80;
+      --title-2: #1f9fb4;
+      --title-3: #5cc9dc;
     }
   }
   /* Tip: to force one theme for everyone, add data-theme="dark" to the
@@ -77,8 +87,63 @@
 
   main { text-align: center; width: 100%; max-width: 960px; }
 
+  /* ==========================================================================
+     TITLE ("Reishi's Return") AND ITS ANIMATION EFFECTS
+     The effect is picked by TITLE_EFFECT in SETTINGS; the script copies it to
+     the title's data-effect attribute, which selects one of the blocks below.
+     ========================================================================== */
+  .title {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(2.2rem, 8vw, 5rem);   /* title size (min, scales, max) */
+    font-weight: 700;
+    line-height: 1.15;
+    margin: 0 0 1.4rem;
+    padding: .1em .15em;                   /* room for the water ripple to spill */
+    color: var(--title-2);                 /* used by "none" and as a fallback */
+  }
+
+  /* --- "water": moving blue gradient + rippling distortion ---------------
+     The ripple comes from the hidden SVG filter #water-ripple in the <body>.
+     Tweak the ripple there (baseFrequency = ripple size, scale = strength). */
+  .title[data-effect="water"] {
+    background: linear-gradient(100deg,
+      var(--title-1) 0%, var(--title-2) 25%, var(--title-3) 40%,
+      var(--title-2) 55%, var(--title-1) 75%, var(--title-2) 100%);
+    background-size: 250% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    filter: url(#water-ripple);
+    animation: water-flow 6s linear infinite;   /* 6s = speed of the light drift */
+  }
+  @keyframes water-flow { to { background-position: -250% 0; } }
+
+  /* --- "shimmer": a bright band of light sweeping across the text ---------- */
+  .title[data-effect="shimmer"] {
+    background: linear-gradient(110deg,
+      var(--title-2) 40%, var(--title-3) 50%, var(--title-2) 60%);
+    background-size: 250% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    animation: shimmer 3s ease-in-out infinite;
+  }
+  @keyframes shimmer { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+
+  /* --- "glow": soft pulsing glow ------------------------------------------- */
+  .title[data-effect="glow"] { animation: glow 3s ease-in-out infinite; }
+  @keyframes glow {
+    50% { text-shadow: 0 0 .25em var(--title-2), 0 0 .6em var(--title-1); color: var(--title-3); }
+  }
+
+  /* --- "wave": each letter bobs up and down in turn ------------------------
+     The script wraps each letter in a <span> and staggers the start time. */
+  .title[data-effect="wave"] span {
+    display: inline-block;
+    animation: bob 2.4s ease-in-out infinite;
+  }
+  @keyframes bob { 50% { transform: translateY(-.12em); color: var(--title-3); } }
+
   /* "COUNTING DOWN TO" heading */
-  h1 {
+  .kicker {
     font-size: clamp(1rem, 2.4vw, 1.4rem);   /* clamp(min, preferred, max) */
     font-weight: 500;
     letter-spacing: .2em;
@@ -181,6 +246,7 @@
   @media (prefers-reduced-motion: reduce) {
     .flip.animate .flap-top, .flip.animate .flap-bottom { animation-duration: .01s; animation-delay: 0s; }
     .sep { animation: none; }
+    .title, .title span { animation: none !important; filter: none !important; }
   }
 
   /* ==========================================================================
@@ -212,9 +278,28 @@
 </head>
 <body>
 <canvas id="confetti"></canvas>
+
+<!-- Hidden SVG filter that makes the "water" title ripple. It generates
+     moving noise (feTurbulence) and uses it to push the text's pixels around
+     (feDisplacementMap).
+       baseFrequency  ripple size: smaller numbers = broader, lazier waves
+       values / dur   how the ripple pattern changes, and how long one cycle takes
+       scale          ripple strength in pixels: 0 = none, 8+ = very wobbly -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="water-ripple" x="-5%" y="-20%" width="110%" height="140%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.004 0.015" numOctaves="1" seed="3" result="noise">
+      <animate attributeName="baseFrequency" dur="8s" repeatCount="indefinite"
+               values="0.004 0.015; 0.006 0.022; 0.004 0.015"/>
+    </feTurbulence>
+    <feDisplacementMap in="SourceGraphic" in2="noise" scale="6"
+                       xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
 <main>
-  <!-- Heading and date line: filled in by the script from SETTINGS. -->
-  <h1 id="heading"></h1>
+  <!-- Title, heading and date line: filled in by the script from SETTINGS. -->
+  <h1 class="title" id="title"></h1>
+  <p class="kicker" id="heading"></p>
   <p class="target" id="target-label"></p>
 
   <!-- The clock. Each empty "digits" box is filled with flip cards by the
@@ -263,7 +348,18 @@
   // Short zone name printed after the time in the date line.
   const TARGET_ZONE_LABEL = "AST";
 
-  // Text above the date line.
+  // Big title at the top of the page.
+  const TITLE = "Reishi's Return";
+
+  // Title animation. One of:
+  //   "water"   shimmering water: blue light drifting through rippling letters
+  //   "shimmer" a bright band of light sweeping across the text
+  //   "glow"    soft pulsing glow
+  //   "wave"    letters gently bob up and down, one after another
+  //   "none"    no animation
+  const TITLE_EFFECT = "water";
+
+  // Small text above the date line.
   const HEADING = "Counting down to";
 
   // Big message that replaces the clock at zero.
@@ -284,6 +380,21 @@
   const target = new Date(TARGET);
 
   // --- Fill in the fixed text from SETTINGS -----------------------------------
+  const titleEl = document.getElementById("title");
+  titleEl.dataset.effect = TITLE_EFFECT;       // picks the CSS effect block
+  if (TITLE_EFFECT === "wave") {
+    // Wrap each letter in its own <span>, each starting its bob a little later.
+    titleEl.setAttribute("aria-label", TITLE);
+    [...TITLE].forEach((ch, i) => {
+      const span = document.createElement("span");
+      span.textContent = ch === " " ? "\u00a0" : ch;   // keep spaces visible
+      span.style.animationDelay = (i * 0.08) + "s";    // 0.08s between letters
+      span.setAttribute("aria-hidden", "true");
+      titleEl.appendChild(span);
+    });
+  } else {
+    titleEl.textContent = TITLE;
+  }
   document.getElementById("heading").textContent = HEADING;
   document.getElementById("done").textContent = DONE_MESSAGE;
 

@@ -1,18 +1,49 @@
 <!doctype html>
+<!--
+  =============================================================================
+  COUNTDOWN CLOCK — single self-contained HTML file (no internet needed)
+  =============================================================================
+
+  HOW TO USE
+    Open this file in any web browser, or upload it to any web host as-is.
+
+  QUICK CHANGES (most edits only need these)
+    What you want to change              Where to look
+    ------------------------------------ -----------------------------------------
+    The date/time it counts down to      SETTINGS block in the <script> near the
+                                         bottom: TARGET
+    The time zone                        SETTINGS: TARGET, TARGET_ZONE,
+                                         TARGET_ZONE_LABEL
+    The heading ("Counting down to")     SETTINGS: HEADING
+    The message shown at zero            SETTINGS: DONE_MESSAGE, ENDED_MESSAGE
+    Confetti on/off, duration, colors    SETTINGS: CONFETTI_*
+    Page colors                          COLORS block at the top of the <style>
+    Browser-tab title                    <title> tag just below
+    Card size                            "FLIP CARD" section of the <style>
+
+  Tip: after editing, save the file and refresh the browser to see the change.
+  =============================================================================
+-->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Text shown on the browser tab. -->
 <title>Countdown</title>
 <style>
+  /* ==========================================================================
+     COLORS
+     Change any hex color (#rrggbb) below. The first set is the DARK theme;
+     the second set is used when the viewer's device is in LIGHT mode.
+     ========================================================================== */
   :root {
-    --bg: #0e1116;
-    --bg-glow: #1b2230;
-    --card: #1f2632;
-    --card-edge: #2b3444;
-    --text: #f3f5f8;
-    --muted: #8a94a6;
-    --accent: #ff8a3d;
+    --bg: #0e1116;         /* page background                              */
+    --bg-glow: #1b2230;    /* soft glow in the middle of the background    */
+    --card: #1f2632;       /* flip-card face                               */
+    --card-edge: #2b3444;  /* flip-card border                             */
+    --text: #f3f5f8;       /* digits and main text                         */
+    --muted: #8a94a6;      /* labels, colons, small text                   */
+    --accent: #ff8a3d;     /* highlight color (time in heading, "It's time!") */
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
@@ -25,7 +56,12 @@
       --accent: #e0661a;
     }
   }
+  /* Tip: to force one theme for everyone, add data-theme="dark" to the
+     <html> tag (forces dark), or delete the @media block above (also dark). */
 
+  /* ==========================================================================
+     PAGE LAYOUT
+     ========================================================================== */
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body {
@@ -33,7 +69,7 @@
     background-color: var(--bg);
     color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    display: grid;
+    display: grid;            /* centers everything on the screen */
     place-items: center;
     padding: 16px;
     overflow-x: hidden;
@@ -41,29 +77,33 @@
 
   main { text-align: center; width: 100%; max-width: 960px; }
 
+  /* "COUNTING DOWN TO" heading */
   h1 {
-    font-size: clamp(1rem, 2.4vw, 1.4rem);
+    font-size: clamp(1rem, 2.4vw, 1.4rem);   /* clamp(min, preferred, max) */
     font-weight: 500;
     letter-spacing: .2em;
     text-transform: uppercase;
     color: var(--muted);
     margin: 0 0 .4rem;
   }
+  /* The date line under the heading (e.g. "Monday, November 2, 2026 · 16:00 AST") */
   .target {
     font-size: clamp(1.3rem, 4vw, 2.2rem);
     font-weight: 700;
     margin: 0 0 2.2rem;
   }
-  .target span { color: var(--accent); }
+  .target span { color: var(--accent); }     /* the time part of that line */
 
+  /* Row holding Days : Hours : Minutes : Seconds */
   .clock {
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    gap: clamp(6px, 2vw, 20px);
+    gap: clamp(6px, 2vw, 20px);              /* space between the groups */
   }
   .unit { display: flex; flex-direction: column; align-items: center; }
-  .digits { display: flex; gap: clamp(3px, .8vw, 8px); }
+  .digits { display: flex; gap: clamp(3px, .8vw, 8px); }  /* space between cards */
+  /* "DAYS", "HOURS", etc. under each group */
   .label {
     margin-top: .8rem;
     font-size: clamp(.65rem, 1.6vw, .85rem);
@@ -71,42 +111,49 @@
     text-transform: uppercase;
     color: var(--muted);
   }
+  /* The blinking colons between groups */
   .sep {
     font-size: clamp(1.6rem, 6vw, 4rem);
-    line-height: clamp(3.4rem, 12vw, 8rem);
+    line-height: clamp(3.4rem, 12vw, 8rem);  /* keep equal to the card height (--h) */
     color: var(--muted);
-    animation: blink 1s steps(1) infinite;
+    animation: blink 1s steps(1) infinite;   /* delete this line to stop blinking */
   }
   @keyframes blink { 50% { opacity: .25; } }
 
-  /* ---------- Flip card ---------- */
+  /* ==========================================================================
+     FLIP CARD
+     Each digit is one card made of four pieces:
+       .top / .bottom           the still upper and lower halves
+       .flap-top / .flap-bottom the halves that rotate during a flip
+     ========================================================================== */
   .flip {
-    --w: clamp(1.9rem, 7vw, 4.6rem);
-    --h: clamp(3.4rem, 12vw, 8rem);
+    --w: clamp(1.9rem, 7vw, 4.6rem);    /* card width  (min, scales with screen, max) */
+    --h: clamp(3.4rem, 12vw, 8rem);     /* card height (min, scales with screen, max) */
     position: relative;
     width: var(--w);
     height: var(--h);
-    font-size: calc(var(--h) * .72);
+    font-size: calc(var(--h) * .72);    /* digit size relative to card height */
     font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    perspective: 400px;
+    font-variant-numeric: tabular-nums; /* all digits same width, so nothing jiggles */
+    perspective: 400px;                 /* 3D depth of the flip; smaller = more dramatic */
   }
   .flip .half {
     position: absolute;
     left: 0; right: 0;
     height: 50%;
-    overflow: hidden;
+    overflow: hidden;                   /* each half shows only its half of the digit */
     background: var(--card);
     border: 1px solid var(--card-edge);
     display: flex;
     justify-content: center;
     backface-visibility: hidden;
   }
+  /* 10px = corner roundness of the cards */
   .flip .top    { top: 0;    border-radius: 10px 10px 0 0; align-items: flex-end; border-bottom: none; }
   .flip .bottom { bottom: 0; border-radius: 0 0 10px 10px; align-items: flex-start; border-top: none; }
   .flip .top span    { transform: translateY(50%); }
   .flip .bottom span { transform: translateY(-50%); }
-  .flip::after {            /* hinge line */
+  .flip::after {            /* thin "hinge" line across the middle of each card */
     content: "";
     position: absolute;
     left: 0; right: 0; top: 50%;
@@ -119,6 +166,9 @@
   .flip .flap-top    { z-index: 3; transform-origin: bottom; }
   .flip .flap-bottom { z-index: 2; transform-origin: top; transform: rotateX(90deg); }
 
+  /* The flip: top flap falls for .3s, then bottom flap lands for .3s.
+     To change speed, change both .3s values (and the delay, the second .3s
+     on the flap-bottom line). Keep the total under 1s. */
   .flip.animate .flap-top    { animation: flipTop .3s ease-in forwards; }
   .flip.animate .flap-bottom { animation: flipBottom .3s ease-out .3s forwards; }
   .flip.animate .flap-top    { box-shadow: inset 0 -30px 30px -20px rgba(0,0,0,.25); }
@@ -126,37 +176,50 @@
   @keyframes flipTop    { to { transform: rotateX(-90deg); } }
   @keyframes flipBottom { from { transform: rotateX(90deg); } to { transform: rotateX(0); } }
 
+  /* Viewers who turned on "reduce motion" in their device settings get
+     near-instant flips and no blinking colons. */
   @media (prefers-reduced-motion: reduce) {
     .flip.animate .flap-top, .flip.animate .flap-bottom { animation-duration: .01s; animation-delay: 0s; }
     .sep { animation: none; }
   }
 
-  /* ---------- Progress + finished state ---------- */
+  /* ==========================================================================
+     FOOTER + "FINISHED" STATE
+     ========================================================================== */
+  /* Small line under the clock ("864 hours · 3,110,985 seconds to go") */
   .footer {
     margin-top: 2.2rem;
     color: var(--muted);
     font-size: .9rem;
   }
+  /* The big message that replaces the clock at zero */
   .done {
     display: none;
     font-size: clamp(2rem, 8vw, 5rem);
     font-weight: 800;
     color: var(--accent);
-    animation: pop .8s cubic-bezier(.2, 1.6, .4, 1) both;
+    animation: pop .8s cubic-bezier(.2, 1.6, .4, 1) both;   /* bouncy pop-in */
   }
   @keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  /* When the countdown ends, the script adds class "finished" to <body>,
+     which hides the clock and shows the message. */
   body.finished .clock { display: none; }
   body.finished .done { display: block; }
 
+  /* Full-screen transparent layer the confetti is drawn on. */
   canvas#confetti { position: fixed; inset: 0; pointer-events: none; }
 </style>
 </head>
 <body>
 <canvas id="confetti"></canvas>
 <main>
-  <h1>Counting down to</h1>
+  <!-- Heading and date line: filled in by the script from SETTINGS. -->
+  <h1 id="heading"></h1>
   <p class="target" id="target-label"></p>
 
+  <!-- The clock. Each empty "digits" box is filled with flip cards by the
+       script. To rename a label, change the text inside class="label".
+       (The data-unit values must stay as they are — the script uses them.) -->
   <div class="clock" id="clock" aria-live="off">
     <div class="unit"><div class="digits" data-unit="days"></div><div class="label">Days</div></div>
     <div class="sep">:</div>
@@ -166,27 +229,75 @@
     <div class="sep">:</div>
     <div class="unit"><div class="digits" data-unit="seconds"></div><div class="label">Seconds</div></div>
   </div>
-  <div class="done" id="done">It's time!</div>
+
+  <!-- Shown in place of the clock once the countdown reaches zero. -->
+  <div class="done" id="done"></div>
 
   <p class="footer" id="footer"></p>
 </main>
 
 <script>
-  // ---- Configuration -------------------------------------------------------
-  // November 2, 2026 at 16:00 Atlantic Standard Time (UTC-4, no DST).
-  // The offset pins one moment for every viewer, wherever they are.
+  // ===========================================================================
+  // SETTINGS — edit these to change the countdown
+  // ===========================================================================
+
+  // The moment the countdown ends, written as:
+  //     "YYYY-MM-DDTHH:MM:SS±HH:MM"
+  //      date      24-hour   offset from UTC
+  // The offset at the end makes it one exact moment for every viewer,
+  // wherever they are. -04:00 is Atlantic Standard Time (AST), which does
+  // not change for daylight saving.
+  // Examples:
+  //     "2026-12-31T23:59:59-04:00"   New Year's Eve, AST
+  //     "2027-03-15T09:30:00-05:00"   9:30 AM US Eastern Standard Time
+  //     "2027-07-04T12:00:00Z"        noon UTC ("Z" means UTC)
   const TARGET = "2026-11-02T16:00:00-04:00";
-  const TARGET_ZONE = "America/Puerto_Rico";   // an IANA zone that is always AST
+
+  // Time zone used to DISPLAY the date line, as an IANA zone name
+  // (list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
+  // "America/Puerto_Rico" is the standard name for AST, the same clock
+  // time as the Eastern Caribbean all year. If you change the offset in
+  // TARGET, change this to a matching zone (e.g. "America/New_York").
+  const TARGET_ZONE = "America/Puerto_Rico";
+
+  // Short zone name printed after the time in the date line.
   const TARGET_ZONE_LABEL = "AST";
-  // -------------------------------------------------------------------------
+
+  // Text above the date line.
+  const HEADING = "Counting down to";
+
+  // Big message that replaces the clock at zero.
+  const DONE_MESSAGE = "It's time!";
+
+  // Small line under the message at zero.
+  const ENDED_MESSAGE = "The countdown has ended.";
+
+  // Confetti at zero: on/off, how long new pieces keep falling, and colors.
+  const CONFETTI_ENABLED = true;
+  const CONFETTI_SECONDS = 6;
+  const CONFETTI_COLORS = ["#ff8a3d", "#ffd23f", "#3ec1d3", "#ff4f79", "#7bd389"];
+
+  // ===========================================================================
+  // Everything below runs the clock. You normally won't need to edit it.
+  // ===========================================================================
 
   const target = new Date(TARGET);
 
+  // --- Fill in the fixed text from SETTINGS -----------------------------------
+  document.getElementById("heading").textContent = HEADING;
+  document.getElementById("done").textContent = DONE_MESSAGE;
+
+  // Builds the date line, e.g. "Monday, November 2, 2026 · 16:00 AST".
+  // undefined = use the viewer's language for day/month names.
+  // hour12: false = 24-hour time; set to true for "4:00 PM".
   document.getElementById("target-label").innerHTML =
     target.toLocaleDateString(undefined, { timeZone: TARGET_ZONE, weekday: "long", month: "long", day: "numeric", year: "numeric" }) +
     " · <span>" + target.toLocaleTimeString(undefined, { timeZone: TARGET_ZONE, hour: "2-digit", minute: "2-digit", hour12: false }) +
     " " + TARGET_ZONE_LABEL + "</span>";
 
+  // --- Flip cards -------------------------------------------------------------
+
+  // Creates one flip card showing the character `ch`.
   function makeCard(ch) {
     const el = document.createElement("div");
     el.className = "flip";
@@ -195,10 +306,11 @@
       `<div class="half bottom"><span>${ch}</span></div>` +
       `<div class="half top flap-top"><span>${ch}</span></div>` +
       `<div class="half bottom flap-bottom"><span>${ch}</span></div>`;
-    el.dataset.value = ch;
+    el.dataset.value = ch;     // remembers what the card currently shows
     return el;
   }
 
+  // Flips card `el` to show `next` (does nothing if it already shows it).
   function setCard(el, next) {
     const prev = el.dataset.value;
     if (prev === next) return;
@@ -210,13 +322,17 @@
     flapTop.firstChild.textContent = prev;
     flapBottom.firstChild.textContent = next;
     el.classList.remove("animate");
-    void el.offsetWidth;            // restart animation
+    void el.offsetWidth;            // forces the browser to restart the animation
     el.classList.add("animate");
     el.dataset.value = next;
+    // After the flip finishes (600ms = both .3s halves), settle the bottom half.
     clearTimeout(el._t);
     el._t = setTimeout(() => { bottom.firstChild.textContent = next; }, 600);
   }
 
+  // Shows `value` in the group named `unit` ("days", "hours", ...), padded
+  // with leading zeros to at least `minDigits` cards. Cards are added or
+  // removed automatically (e.g. days going from 100 to 99).
   function render(unit, value, minDigits) {
     const box = document.querySelector(`[data-unit="${unit}"]`);
     const str = String(value).padStart(minDigits, "0");
@@ -225,56 +341,66 @@
     [...str].forEach((ch, i) => setCard(box.children[i], ch));
   }
 
+  // --- Countdown loop ---------------------------------------------------------
+
   const footer = document.getElementById("footer");
   let finished = false;
 
+  // Runs once per second: works out the time left and updates the cards.
   function tick() {
-    const diff = target - Date.now();
+    const diff = target - Date.now();          // milliseconds remaining
     if (diff <= 0) {
       if (!finished) finish();
       return;
     }
-    const s = Math.floor(diff / 1000);
-    render("days", Math.floor(s / 86400), 2);
-    render("hours", Math.floor(s / 3600) % 24, 2);
-    render("minutes", Math.floor(s / 60) % 60, 2);
-    render("seconds", s % 60, 2);
+    const s = Math.floor(diff / 1000);         // whole seconds remaining
+    render("days",    Math.floor(s / 86400),     2);  // 86400 seconds per day
+    render("hours",   Math.floor(s / 3600) % 24, 2);
+    render("minutes", Math.floor(s / 60) % 60,   2);
+    render("seconds", s % 60,                    2);
+    // Footer line under the clock. Edit the text between the backticks to change it.
     footer.textContent = `${Math.floor(s / 3600).toLocaleString()} hours · ${s.toLocaleString()} seconds to go`;
   }
 
+  // Runs once when the countdown reaches zero.
   function finish() {
     finished = true;
-    document.body.classList.add("finished");
-    footer.textContent = "The countdown has ended.";
-    confetti();
+    document.body.classList.add("finished");   // hides clock, shows DONE_MESSAGE
+    footer.textContent = ENDED_MESSAGE;
+    if (CONFETTI_ENABLED) confetti();
   }
 
-  // Align ticks to the start of each second so the flip lands on the change.
+  // Schedules each tick right at the start of the next second, so the
+  // seconds card flips in step with a real clock.
   function schedule() {
     tick();
     if (!finished) setTimeout(schedule, 1000 - (Date.now() % 1000) + 5);
   }
   schedule();
 
-  // ---- Confetti on completion ----------------------------------------------
+  // --- Confetti ---------------------------------------------------------------
+  // Draws falling paper pieces on the full-screen canvas. Skipped for viewers
+  // who turned on "reduce motion".
   function confetti() {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const c = document.getElementById("confetti");
     const ctx = c.getContext("2d");
     const resize = () => { c.width = innerWidth; c.height = innerHeight; };
     resize(); addEventListener("resize", resize);
-    const colors = ["#ff8a3d", "#ffd23f", "#3ec1d3", "#ff4f79", "#7bd389"];
+    // 180 = number of pieces. Each gets a random position, size, speed and spin.
     const bits = Array.from({ length: 180 }, () => ({
       x: Math.random() * c.width, y: -20 - Math.random() * c.height,
-      w: 6 + Math.random() * 6, h: 8 + Math.random() * 8,
-      vy: 2 + Math.random() * 3, vx: -1 + Math.random() * 2,
-      r: Math.random() * Math.PI, vr: -.1 + Math.random() * .2,
-      color: colors[Math.floor(Math.random() * colors.length)]
+      w: 6 + Math.random() * 6, h: 8 + Math.random() * 8,       // size (px)
+      vy: 2 + Math.random() * 3, vx: -1 + Math.random() * 2,    // fall / drift speed
+      r: Math.random() * Math.PI, vr: -.1 + Math.random() * .2, // rotation / spin
+      color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)]
     }));
     const start = performance.now();
     (function frame(t) {
       ctx.clearRect(0, 0, c.width, c.height);
-      const recycle = t - start < 6000;
+      // For CONFETTI_SECONDS, pieces that fall off the bottom restart at the
+      // top; after that they fall away and the animation stops by itself.
+      const recycle = t - start < CONFETTI_SECONDS * 1000;
       let alive = 0;
       for (const b of bits) {
         b.x += b.vx; b.y += b.vy; b.r += b.vr;

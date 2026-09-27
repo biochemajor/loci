@@ -136,10 +136,20 @@
     55%, 100% { background-position: 0% 0; }      /* glint just off the right edge */
   }
 
-  /* --- "glow": soft pulsing glow ------------------------------------------- */
+  /* --- "glow": soft pulsing glow -------------------------------------------
+     3s = time for one full pulse (brighten + fade). The text-shadow lines set
+     the halo: first value pair is size (.25em inner, .6em outer). */
   .title[data-effect="glow"] { animation: glow 3s ease-in-out infinite; }
   @keyframes glow {
     50% { text-shadow: 0 0 .25em var(--title-2), 0 0 .6em var(--title-1); color: var(--title-3); }
+  }
+  /* Light mode: a bright glow washes out on a pale page, so the letters
+     darken slightly and the halo is softer and see-through instead. */
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) .title[data-effect="glow"] { animation-name: glow-light; }
+  }
+  @keyframes glow-light {
+    50% { text-shadow: 0 0 .2em rgba(62, 193, 211, .55), 0 0 .55em rgba(62, 193, 211, .35); color: var(--title-1); }
   }
 
   /* --- "wave": each letter bobs up and down in turn ------------------------
@@ -365,7 +375,7 @@
   //   "glow"    soft pulsing glow
   //   "wave"    letters gently bob up and down, one after another
   //   "none"    no animation
-  const TITLE_EFFECT = "shimmer";
+  const TITLE_EFFECT = "glow";
 
   // Small text above the date line.
   const HEADING = "Counting down to";

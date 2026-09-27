@@ -21,6 +21,8 @@
     The moon (on/off)                    SETTINGS: SHOW_MOON
     Moon waxing and waning               SETTINGS: MOON_PHASES, MOON_CYCLE_SECONDS
     Fireflies                            SETTINGS: SHOW_FIREFLIES, FIREFLY_*
+    Starfield                            SETTINGS: SHOW_STARS, STAR_*
+    Water + moon reflection              SETTINGS: SHOW_WATER, WATER_HEIGHT
     Clouds drifting past the moon        SETTINGS: SHOW_CLOUDS, CLOUD_*
     Moon size, position, colors          "FULL MOON" section of the <style>
     Title colors (incl. shimmer glint)   COLORS block: --title-*
@@ -67,6 +69,11 @@
     --moon-glow: rgba(220, 240, 255, .35);  /* halo around the moon          */
     --moon-shadow: rgba(14, 17, 22, .9);    /* dark (unlit) part of the moon */
     --firefly: #d8ff6a;                     /* firefly light                 */
+    --star: #ffffff;                        /* background stars              */
+    --water-top: #122036;                   /* water color at the horizon    */
+    --water-bottom: #06090f;                /* water color at the bottom     */
+    --moonlight: 255, 247, 222;             /* moon reflection on the water
+                                               (three numbers: red, green, blue) */
     --cloud: rgba(165, 180, 205, .75);      /* clouds (color + see-through)  */
   }
   @media (prefers-color-scheme: light) {
@@ -90,6 +97,10 @@
       --moon-glow: rgba(31, 159, 180, .3);
       --moon-shadow: rgba(150, 160, 178, .8);
       --firefly: #a8b800;
+      --star: #7d91ab;
+      --water-top: #c4d7e6;
+      --water-bottom: #9fb9cf;
+      --moonlight: 255, 255, 255;
       --cloud: rgba(120, 140, 165, .6);
     }
   }
@@ -349,6 +360,10 @@
   /* Full-screen transparent layer the confetti is drawn on. */
   canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
 
+  /* Background canvas the starfield and the water are painted on (by the
+     script, see "Starfield and water"). It sits behind everything else. */
+  canvas#scene { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+
   /* ==========================================================================
      SHOOTING STARS (SHOOTING_STARS)
      Each star is a thin line: bright head on one end fading to a transparent
@@ -486,6 +501,8 @@
 </head>
 <body>
 <canvas id="confetti"></canvas>
+<!-- Starfield and water with the moon's reflection (painted by the script). -->
+<canvas id="scene" aria-hidden="true"></canvas>
 <!-- Background layer the shooting stars fly across. -->
 <div class="sky" id="sky" aria-hidden="true"></div>
 <!-- Full moon in the top-right corner (styles: "FULL MOON" section). -->
@@ -623,6 +640,24 @@
   //   MOON_CYCLE_SECONDS  seconds for one complete cycle (full → new → full)
   const MOON_PHASES = true;
   const MOON_CYCLE_SECONDS = 60;
+
+  // Starfield: tiny twinkling stars filling the sky.
+  //   SHOW_STARS          true = on, false = off
+  //   STAR_COUNT          number of stars on a typical laptop screen (phones
+  //                       get proportionally fewer, big screens more)
+  //   STAR_TWINKLE_SPEED  how fast stars twinkle [slowest, fastest]
+  // Star color: --star in the COLORS block at the top.
+  const SHOW_STARS = true;
+  const STAR_COUNT = 170;
+  const STAR_TWINKLE_SPEED = [0.6, 2.2];
+
+  // Water along the bottom of the page, with a shimmering path of moonlight
+  // under the moon. The reflection brightens and dims with the moon's phase.
+  //   SHOW_WATER    true = on, false = off
+  //   WATER_HEIGHT  how much of the screen the water covers (0.2 = bottom 20%)
+  // Colors: --water-top, --water-bottom and --moonlight in the COLORS block.
+  const SHOW_WATER = true;
+  const WATER_HEIGHT = 0.2;
 
   // Clouds drifting past the moon.
   //   SHOW_CLOUDS   true = on, false = off
@@ -842,6 +877,128 @@
     })(moonStart);
   } else {
     setMoonPhase(0.5);                               // always full
+  }
+
+  // --- Starfield and water ----------------------------------------------------
+  // Both are painted on the #scene canvas, redrawn every frame so the stars can
+  // twinkle and the moonlight can shimmer on the water.
+  const scene = document.getElementById("scene");
+  const sctx = scene.getContext("2d");
+  const sceneMotion = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let W = 0, H = 0, horizon = 0, stars = [], colors = {};
+
+  // Reads the current theme's colors from the COLORS block.
+  function readSceneColors() {
+    const cs = getComputedStyle(document.documentElement);
+    const v = name => cs.getPropertyValue(name).trim();
+    colors = { star: v("--star"), top: v("--water-top"), bottom: v("--water-bottom"), light: v("--moonlight") };
+  }
+
+  // Sizes the canvas to the window (sharp on high-resolution screens) and
+  // scatters a fresh set of stars across the sky above the water.
+  function resizeScene() {
+    const dpr = window.devicePixelRatio || 1;
+    W = innerWidth; H = innerHeight;
+    scene.width = W * dpr; scene.height = H * dpr;
+    sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    horizon = SHOW_WATER ? Math.round(H * (1 - WATER_HEIGHT)) : H;
+    // Center the clock in the sky above the water, not over it.
+    document.body.style.paddingBottom = SHOW_WATER ? `calc(16px + ${WATER_HEIGHT * 100}vh)` : "";
+    const count = Math.round(STAR_COUNT * Math.min(1.6, (W * H) / (1280 * 800)));
+    stars = Array.from({ length: SHOW_STARS ? count : 0 }, () => {
+      const bright = Math.random() < 0.08;           // 8% are bigger, glowing stars
+      return {
+        x: rand(0, W),
+        y: horizon * Math.pow(Math.random(), 1.4),   // more stars higher up
+        r: bright ? rand(1.2, 1.8) : rand(0.4, 1.1),
+        bright,
+        base: rand(0.35, 0.95),                      // normal brightness
+        speed: rand(STAR_TWINKLE_SPEED[0], STAR_TWINKLE_SPEED[1]),
+        phase: rand(0, 2 * Math.PI)
+      };
+    });
+  }
+
+  function drawStars(t) {
+    sctx.fillStyle = colors.star;
+    sctx.shadowColor = colors.star;
+    for (const s of stars) {
+      // brightness gently rises and falls around its normal level
+      sctx.globalAlpha = s.base * (0.55 + 0.45 * Math.sin(t * s.speed + s.phase));
+      sctx.shadowBlur = s.bright ? 6 : 0;
+      sctx.beginPath();
+      sctx.arc(s.x, s.y, s.r, 0, 2 * Math.PI);
+      sctx.fill();
+    }
+    sctx.globalAlpha = 1;
+    sctx.shadowBlur = 0;
+  }
+
+  function drawWater(t) {
+    const depth = H - horizon;
+    // Water: gradient from the horizon down.
+    const g = sctx.createLinearGradient(0, horizon, 0, H);
+    g.addColorStop(0, colors.top);
+    g.addColorStop(1, colors.bottom);
+    sctx.fillStyle = g;
+    sctx.fillRect(0, horizon, W, depth);
+    // Faint line of light along the horizon.
+    sctx.fillStyle = `rgba(${colors.light}, .18)`;
+    sctx.fillRect(0, horizon, W, 1);
+    // Gentle ripple lines across the whole surface.
+    for (let y = horizon + 6; y < H; y += 10) {
+      sctx.fillStyle = `rgba(${colors.light}, ${0.015 + 0.02 * Math.sin(t * 0.8 + y * 0.3)})`;
+      sctx.fillRect(0, y, W, 1);
+    }
+
+    // Moonlight on the water: a column of short, flickering streaks under the
+    // moon that widens toward the viewer, scaled by how much of the moon is lit.
+    if (!SHOW_MOON || !moonEl.isConnected) return;
+    const m = moonEl.getBoundingClientRect();
+    const mx = m.left + m.width / 2;
+    const lit = parseFloat(moonEl.style.getPropertyValue("--lit")) || 1;
+    // soft glow on the water right under the moon
+    const glow = sctx.createRadialGradient(mx, horizon, 0, mx, horizon, m.width * 1.6);
+    glow.addColorStop(0, `rgba(${colors.light}, ${0.22 * lit})`);
+    glow.addColorStop(1, `rgba(${colors.light}, 0)`);
+    sctx.fillStyle = glow;
+    sctx.fillRect(mx - m.width * 1.6, horizon, m.width * 3.2, m.width * 1.6);
+    // the shimmering streaks: a row every 4px, each with a few short glints
+    // that slide, stretch and flicker at different rhythms
+    sctx.filter = "blur(0.7px)";                     // soften (ignored by some browsers)
+    for (let y = horizon + 2; y < H; y += 4) {
+      const d = (y - horizon) / depth;               // 0 at horizon, 1 at bottom
+      const spread = m.width * (0.3 + 1.1 * d);      // column widens toward the bottom
+      for (let k = 0; k < 3; k++) {
+        const offset = Math.sin(t * 1.1 + y * 0.35 + k * 2.1) * spread * 0.5;
+        const len = spread * (0.08 + 0.3 * Math.pow(0.5 + 0.5 * Math.sin(t * 1.9 + y * 0.7 + k), 2));
+        const flicker = Math.pow(0.5 + 0.5 * Math.sin(t * 2.6 + y * 1.3 + k * 1.7), 2);
+        const a = lit * (0.55 - 0.3 * d) * flicker;
+        if (a < 0.02) continue;
+        sctx.fillStyle = `rgba(${colors.light}, ${a.toFixed(3)})`;
+        sctx.fillRect(mx + offset - len / 2, y + Math.sin(t + k + y) * 0.8, len, 1.2);
+      }
+    }
+    sctx.filter = "none";
+  }
+
+  function drawScene(now) {
+    const t = now / 1000;                            // seconds
+    sctx.clearRect(0, 0, W, H);
+    if (SHOW_STARS) drawStars(t);
+    if (SHOW_WATER) drawWater(t);
+    if (sceneMotion) requestAnimationFrame(drawScene);
+  }
+
+  if (SHOW_STARS || SHOW_WATER) {
+    readSceneColors();
+    resizeScene();
+    addEventListener("resize", () => { resizeScene(); if (!sceneMotion) drawScene(0); });
+    // Switch colors if the device changes between light and dark mode.
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+      readSceneColors(); if (!sceneMotion) drawScene(0);
+    });
+    requestAnimationFrame(drawScene);                // with reduced motion: drawn once, still
   }
 
   // --- Clouds -----------------------------------------------------------------

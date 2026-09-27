@@ -17,6 +17,7 @@
     The big title ("Reishi's Return")    SETTINGS: TITLE
     The title animation style            SETTINGS: TITLE_EFFECT
     Twinkling stars around the title     SETTINGS: TITLE_TWINKLE, TWINKLE_*
+    Shooting stars in the background     SETTINGS: SHOOTING_STARS, SHOOTING_STAR_*
     Title colors (incl. shimmer glint)   COLORS block: --title-*
     The heading ("Counting down to")     SETTINGS: HEADING
     The message shown at zero            SETTINGS: DONE_MESSAGE, ENDED_MESSAGE
@@ -54,6 +55,7 @@
     --title-3: #e6fbff;
     --title-shine: #ffffff;   /* the glint in the "shimmer" effect */
     --twinkle: #e6fbff;       /* color of the twinkling stars */
+    --shooting-star: #e6fbff; /* color of the shooting stars */
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
@@ -69,6 +71,7 @@
       --title-3: #5cc9dc;
       --title-shine: #d9f7fc;
       --twinkle: #1f9fb4;
+      --shooting-star: #1f9fb4;
     }
   }
   /* Tip: to force one theme for everyone, add data-theme="dark" to the
@@ -90,7 +93,8 @@
     overflow-x: hidden;
   }
 
-  main { text-align: center; width: 100%; max-width: 960px; }
+  /* position + z-index keep the page content in front of the shooting stars */
+  main { text-align: center; width: 100%; max-width: 960px; position: relative; z-index: 1; }
 
   /* ==========================================================================
      TITLE ("Reishi's Return") AND ITS ANIMATION EFFECTS
@@ -294,7 +298,7 @@
     .flip.animate .flap-top, .flip.animate .flap-bottom { animation-duration: .01s; animation-delay: 0s; }
     .sep { animation: none; }
     .title, .title span { animation: none !important; filter: none !important; }
-    .sparkles { display: none; }
+    .sparkles, .sky { display: none; }
   }
 
   /* ==========================================================================
@@ -321,11 +325,38 @@
   body.finished .done { display: block; }
 
   /* Full-screen transparent layer the confetti is drawn on. */
-  canvas#confetti { position: fixed; inset: 0; pointer-events: none; }
+  canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+
+  /* ==========================================================================
+     SHOOTING STARS (SHOOTING_STARS)
+     Each star is a thin line: bright head on one end fading to a transparent
+     tail. The script creates one, flies it across the background and removes it.
+     ========================================================================== */
+  .sky { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+  .shooting-star {
+    position: absolute;
+    height: 2px;                                 /* tail thickness */
+    border-radius: 2px;
+    background: linear-gradient(to right, transparent, var(--shooting-star));
+    transform-origin: left center;
+    opacity: 0;
+  }
+  .shooting-star::after {                        /* glowing head */
+    content: "";
+    position: absolute;
+    right: -2px; top: 50%;
+    width: 4px; height: 4px;
+    margin-top: -2px;
+    border-radius: 50%;
+    background: var(--shooting-star);
+    box-shadow: 0 0 6px 2px var(--shooting-star);
+  }
 </style>
 </head>
 <body>
 <canvas id="confetti"></canvas>
+<!-- Background layer the shooting stars fly across. -->
+<div class="sky" id="sky" aria-hidden="true"></div>
 
 <!-- Hidden SVG filter that makes the "water" title ripple. It generates
      moving noise (feTurbulence) and uses it to push the text's pixels around
@@ -421,6 +452,17 @@
   const TWINKLE_COUNT = 9;
   const TWINKLE_SIZE  = [8, 22];
   const TWINKLE_SPEED = [1.6, 3.2];
+
+  // Shooting stars streaking across the page background.
+  //   SHOOTING_STARS          true = on, false = off
+  //   SHOOTING_STAR_EVERY     seconds between stars [shortest, longest wait]
+  //   SHOOTING_STAR_LENGTH    tail length in pixels [shortest, longest]
+  //   SHOOTING_STAR_DURATION  seconds each star takes to cross [fastest, slowest]
+  // Star color: --shooting-star in the COLORS block at the top.
+  const SHOOTING_STARS = true;
+  const SHOOTING_STAR_EVERY    = [2, 6];
+  const SHOOTING_STAR_LENGTH   = [80, 180];
+  const SHOOTING_STAR_DURATION = [0.8, 1.6];
 
   // Small text above the date line.
   const HEADING = "Counting down to";
@@ -577,6 +619,43 @@
     if (!finished) setTimeout(schedule, 1000 - (Date.now() % 1000) + 5);
   }
   schedule();
+
+  // --- Shooting stars ---------------------------------------------------------
+  const sky = document.getElementById("sky");
+
+  // Launches one shooting star from a random spot in the top half of the
+  // screen, heading down-right or down-left at a shallow angle.
+  function shootStar() {
+    const star = document.createElement("div");
+    star.className = "shooting-star";
+    const len = rand(SHOOTING_STAR_LENGTH[0], SHOOTING_STAR_LENGTH[1]);
+    const tilt = rand(15, 35);                           // degrees below horizontal
+    const angle = Math.random() < 0.5 ? tilt : 180 - tilt;  // left→right or right→left
+    const travel = rand(0.35, 0.6) * Math.max(innerWidth, innerHeight);  // pixels flown
+    star.style.width = len + "px";
+    star.style.left = rand(0.1, 0.9) * innerWidth + "px";
+    star.style.top = rand(0, 0.5) * innerHeight + "px";
+    sky.appendChild(star);
+    // Fade in quickly, fly along the angle, fade out, then remove the element.
+    star.animate([
+      { transform: `rotate(${angle}deg) translateX(0)`, opacity: 0 },
+      { opacity: 1, offset: 0.15 },
+      { opacity: 1, offset: 0.7 },
+      { transform: `rotate(${angle}deg) translateX(${travel}px)`, opacity: 0 }
+    ], {
+      duration: rand(SHOOTING_STAR_DURATION[0], SHOOTING_STAR_DURATION[1]) * 1000,
+      easing: "ease-in"
+    }).onfinish = () => star.remove();
+  }
+
+  // Launches a star, then waits a random time before the next one.
+  function scheduleShootingStar() {
+    shootStar();
+    setTimeout(scheduleShootingStar, rand(SHOOTING_STAR_EVERY[0], SHOOTING_STAR_EVERY[1]) * 1000);
+  }
+  if (SHOOTING_STARS && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    setTimeout(scheduleShootingStar, 1000);   // first star 1s after the page opens
+  }
 
   // --- Confetti ---------------------------------------------------------------
   // Draws falling paper pieces on the full-screen canvas. Skipped for viewers

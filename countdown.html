@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Countdown</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --bg-glow: #1b2230;
+    --card: #1f2632;
+    --card-edge: #2b3444;
+    --text: #f3f5f8;
+    --muted: #8a94a6;
+    --accent: #ff8a3d;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #eef1f5;
+      --bg-glow: #ffffff;
+      --card: #ffffff;
+      --card-edge: #d8dde5;
+      --text: #151a22;
+      --muted: #5f6878;
+      --accent: #e0661a;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: radial-gradient(ellipse at 50% 30%, var(--bg-glow), var(--bg) 70%);
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    overflow-x: hidden;
+  }
+
+  main { text-align: center; width: 100%; max-width: 960px; }
+
+  h1 {
+    font-size: clamp(1rem, 2.4vw, 1.4rem);
+    font-weight: 500;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 .4rem;
+  }
+  .target {
+    font-size: clamp(1.3rem, 4vw, 2.2rem);
+    font-weight: 700;
+    margin: 0 0 2.2rem;
+  }
+  .target span { color: var(--accent); }
+
+  .clock {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: clamp(6px, 2vw, 20px);
+  }
+  .unit { display: flex; flex-direction: column; align-items: center; }
+  .digits { display: flex; gap: clamp(3px, .8vw, 8px); }
+  .label {
+    margin-top: .8rem;
+    font-size: clamp(.65rem, 1.6vw, .85rem);
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .sep {
+    font-size: clamp(1.6rem, 6vw, 4rem);
+    line-height: clamp(3.4rem, 12vw, 8rem);
+    color: var(--muted);
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: .25; } }
+
+  /* ---------- Flip card ---------- */
+  .flip {
+    --w: clamp(1.9rem, 7vw, 4.6rem);
+    --h: clamp(3.4rem, 12vw, 8rem);
+    position: relative;
+    width: var(--w);
+    height: var(--h);
+    font-size: calc(var(--h) * .72);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    perspective: 400px;
+  }
+  .flip .half {
+    position: absolute;
+    left: 0; right: 0;
+    height: 50%;
+    overflow: hidden;
+    background: var(--card);
+    border: 1px solid var(--card-edge);
+    display: flex;
+    justify-content: center;
+    backface-visibility: hidden;
+  }
+  .flip .top    { top: 0;    border-radius: 10px 10px 0 0; align-items: flex-end; border-bottom: none; }
+  .flip .bottom { bottom: 0; border-radius: 0 0 10px 10px; align-items: flex-start; border-top: none; }
+  .flip .top span    { transform: translateY(50%); }
+  .flip .bottom span { transform: translateY(-50%); }
+  .flip::after {            /* hinge line */
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 2px;
+    transform: translateY(-1px);
+    background: var(--bg);
+    z-index: 5;
+  }
+
+  .flip .flap-top    { z-index: 3; transform-origin: bottom; }
+  .flip .flap-bottom { z-index: 2; transform-origin: top; transform: rotateX(90deg); }
+
+  .flip.animate .flap-top    { animation: flipTop .3s ease-in forwards; }
+  .flip.animate .flap-bottom { animation: flipBottom .3s ease-out .3s forwards; }
+  .flip.animate .flap-top    { box-shadow: inset 0 -30px 30px -20px rgba(0,0,0,.25); }
+
+  @keyframes flipTop    { to { transform: rotateX(-90deg); } }
+  @keyframes flipBottom { from { transform: rotateX(90deg); } to { transform: rotateX(0); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flip.animate .flap-top, .flip.animate .flap-bottom { animation-duration: .01s; animation-delay: 0s; }
+    .sep { animation: none; }
+  }
+
+  /* ---------- Progress + finished state ---------- */
+  .footer {
+    margin-top: 2.2rem;
+    color: var(--muted);
+    font-size: .9rem;
+  }
+  .done {
+    display: none;
+    font-size: clamp(2rem, 8vw, 5rem);
+    font-weight: 800;
+    color: var(--accent);
+    animation: pop .8s cubic-bezier(.2, 1.6, .4, 1) both;
+  }
+  @keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  body.finished .clock { display: none; }
+  body.finished .done { display: block; }
+
+  canvas#confetti { position: fixed; inset: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="confetti"></canvas>
+<main>
+  <h1>Counting down to</h1>
+  <p class="target" id="target-label"></p>
+
+  <div class="clock" id="clock" aria-live="off">
+    <div class="unit"><div class="digits" data-unit="days"></div><div class="label">Days</div></div>
+    <div class="sep">:</div>
+    <div class="unit"><div class="digits" data-unit="hours"></div><div class="label">Hours</div></div>
+    <div class="sep">:</div>
+    <div class="unit"><div class="digits" data-unit="minutes"></div><div class="label">Minutes</div></div>
+    <div class="sep">:</div>
+    <div class="unit"><div class="digits" data-unit="seconds"></div><div class="label">Seconds</div></div>
+  </div>
+  <div class="done" id="done">It's time!</div>
+
+  <p class="footer" id="footer"></p>
+</main>
+
+<script>
+  // ---- Configuration -------------------------------------------------------
+  // November 2, 2026 at 16:00. With no offset this is the *viewer's* local time.
+  // To pin a specific zone, append an offset, e.g. "2026-11-02T16:00:00-05:00"
+  // (US Eastern Standard Time — DST ends Nov 1, 2026).
+  const TARGET = "2026-11-02T16:00:00";
+  // -------------------------------------------------------------------------
+
+  const target = new Date(TARGET);
+
+  document.getElementById("target-label").innerHTML =
+    target.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" }) +
+    " · <span>" + target.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false }) + "</span>";
+
+  function makeCard(ch) {
+    const el = document.createElement("div");
+    el.className = "flip";
+    el.innerHTML =
+      `<div class="half top"><span>${ch}</span></div>` +
+      `<div class="half bottom"><span>${ch}</span></div>` +
+      `<div class="half top flap-top"><span>${ch}</span></div>` +
+      `<div class="half bottom flap-bottom"><span>${ch}</span></div>`;
+    el.dataset.value = ch;
+    return el;
+  }
+
+  function setCard(el, next) {
+    const prev = el.dataset.value;
+    if (prev === next) return;
+    const [top, bottom, flapTop, flapBottom] = el.querySelectorAll(".half");
+    // Static top shows the new value (revealed as the flap falls);
+    // static bottom keeps the old value until the lower flap covers it.
+    top.firstChild.textContent = next;
+    bottom.firstChild.textContent = prev;
+    flapTop.firstChild.textContent = prev;
+    flapBottom.firstChild.textContent = next;
+    el.classList.remove("animate");
+    void el.offsetWidth;            // restart animation
+    el.classList.add("animate");
+    el.dataset.value = next;
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { bottom.firstChild.textContent = next; }, 600);
+  }
+
+  function render(unit, value, minDigits) {
+    const box = document.querySelector(`[data-unit="${unit}"]`);
+    const str = String(value).padStart(minDigits, "0");
+    while (box.children.length < str.length) box.prepend(makeCard("0"));
+    while (box.children.length > str.length) box.firstChild.remove();
+    [...str].forEach((ch, i) => setCard(box.children[i], ch));
+  }
+
+  const footer = document.getElementById("footer");
+  let finished = false;
+
+  function tick() {
+    const diff = target - Date.now();
+    if (diff <= 0) {
+      if (!finished) finish();
+      return;
+    }
+    const s = Math.floor(diff / 1000);
+    render("days", Math.floor(s / 86400), 2);
+    render("hours", Math.floor(s / 3600) % 24, 2);
+    render("minutes", Math.floor(s / 60) % 60, 2);
+    render("seconds", s % 60, 2);
+    footer.textContent = `${Math.floor(s / 3600).toLocaleString()} hours · ${s.toLocaleString()} seconds to go`;
+  }
+
+  function finish() {
+    finished = true;
+    document.body.classList.add("finished");
+    footer.textContent = "The countdown has ended.";
+    confetti();
+  }
+
+  // Align ticks to the start of each second so the flip lands on the change.
+  function schedule() {
+    tick();
+    if (!finished) setTimeout(schedule, 1000 - (Date.now() % 1000) + 5);
+  }
+  schedule();
+
+  // ---- Confetti on completion ----------------------------------------------
+  function confetti() {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const c = document.getElementById("confetti");
+    const ctx = c.getContext("2d");
+    const resize = () => { c.width = innerWidth; c.height = innerHeight; };
+    resize(); addEventListener("resize", resize);
+    const colors = ["#ff8a3d", "#ffd23f", "#3ec1d3", "#ff4f79", "#7bd389"];
+    const bits = Array.from({ length: 180 }, () => ({
+      x: Math.random() * c.width, y: -20 - Math.random() * c.height,
+      w: 6 + Math.random() * 6, h: 8 + Math.random() * 8,
+      vy: 2 + Math.random() * 3, vx: -1 + Math.random() * 2,
+      r: Math.random() * Math.PI, vr: -.1 + Math.random() * .2,
+      color: colors[Math.floor(Math.random() * colors.length)]
+    }));
+    const start = performance.now();
+    (function frame(t) {
+      ctx.clearRect(0, 0, c.width, c.height);
+      const recycle = t - start < 6000;
+      let alive = 0;
+      for (const b of bits) {
+        b.x += b.vx; b.y += b.vy; b.r += b.vr;
+        if (b.y > c.height + 20 && recycle) { b.y = -20; b.x = Math.random() * c.width; }
+        if (b.y <= c.height + 20) alive++;
+        ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r);
+        ctx.fillStyle = b.color; ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h);
+        ctx.restore();
+      }
+      if (alive) requestAnimationFrame(frame);
+    })(start);
+  }
+</script>
+</body>
+</html>

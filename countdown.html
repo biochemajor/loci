@@ -20,6 +20,7 @@
     Shooting stars in the background     SETTINGS: SHOOTING_STARS, SHOOTING_STAR_*
     The moon (on/off)                    SETTINGS: SHOW_MOON
     Moon waxing and waning               SETTINGS: MOON_PHASES, MOON_CYCLE_SECONDS
+    Fireflies                            SETTINGS: SHOW_FIREFLIES, FIREFLY_*
     Clouds drifting past the moon        SETTINGS: SHOW_CLOUDS, CLOUD_*
     Moon size, position, colors          "FULL MOON" section of the <style>
     Title colors (incl. shimmer glint)   COLORS block: --title-*
@@ -65,6 +66,7 @@
     --moon-crater: rgba(150, 142, 120, .28);/* crater shading                */
     --moon-glow: rgba(220, 240, 255, .35);  /* halo around the moon          */
     --moon-shadow: rgba(14, 17, 22, .9);    /* dark (unlit) part of the moon */
+    --firefly: #d8ff6a;                     /* firefly light                 */
     --cloud: rgba(165, 180, 205, .75);      /* clouds (color + see-through)  */
   }
   @media (prefers-color-scheme: light) {
@@ -87,6 +89,7 @@
       --moon-crater: rgba(140, 130, 105, .32);
       --moon-glow: rgba(31, 159, 180, .3);
       --moon-shadow: rgba(150, 160, 178, .8);
+      --firefly: #a8b800;
       --cloud: rgba(120, 140, 165, .6);
     }
   }
@@ -316,6 +319,7 @@
     .title, .title span { animation: none !important; filter: none !important; }
     .sparkles, .sky { display: none; }
     .moon::before { animation: none; }
+    .fireflies { display: none; }
     .clouds { display: none; }
   }
 
@@ -417,7 +421,8 @@
     position: fixed;
     top: 0; right: 0;
     width: min(560px, 75vw);                        /* how far left clouds travel */
-    height: calc(var(--moon-top) + var(--moon-size) * 1.5);  /* band around the moon */
+    /* band around the moon; tall enough that no cloud gets its bottom cut off */
+    height: calc(var(--moon-top) + var(--moon-size) + 160px);
     overflow: hidden;
     pointer-events: none;
     z-index: 0;
@@ -444,6 +449,27 @@
   @keyframes cloud-drift {
     from { left: 100%; }
     to   { left: -300px; }                         /* fully off the left edge */
+  }
+
+  /* ==========================================================================
+     FIREFLIES (SHOW_FIREFLIES)
+     Small glowing dots. The script moves them around slowly; the CSS below
+     makes each one blink on and off at its own pace. Color: --firefly.
+     ========================================================================== */
+  .fireflies { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+  .firefly {
+    position: absolute;
+    left: 0; top: 0;
+    width: 5px; height: 5px;                       /* size of the bright center */
+    margin: -2.5px 0 0 -2.5px;
+    border-radius: 50%;
+    background: var(--firefly);
+    box-shadow: 0 0 6px 2px var(--firefly), 0 0 16px 6px var(--firefly);  /* glow */
+    animation: firefly-blink var(--blink, 3s) ease-in-out var(--delay, 0s) infinite;
+  }
+  @keyframes firefly-blink {
+    0%, 100% { opacity: .05; }     /* nearly off */
+    45%, 60% { opacity: 1; }       /* fully lit */
   }
 
   .shooting-star::after {                        /* glowing head */
@@ -479,6 +505,8 @@
 </div>
 <!-- Clouds drifting past the moon (styles: "CLOUDS" section). -->
 <div class="clouds" id="clouds" aria-hidden="true"></div>
+<!-- Fireflies drifting around the lower part of the page. -->
+<div class="fireflies" id="fireflies" aria-hidden="true"></div>
 
 <!-- Hidden SVG filter that makes the "water" title ripple. It generates
      moving noise (feTurbulence) and uses it to push the text's pixels around
@@ -606,6 +634,20 @@
   const CLOUD_COUNT = 3;
   const CLOUD_SPEED = [35, 60];
   const CLOUD_SIZE  = [0.6, 1.2];
+
+  // Fireflies drifting and blinking around the page.
+  //   SHOW_FIREFLIES   true = on, false = off
+  //   FIREFLY_COUNT    how many fireflies
+  //   FIREFLY_SPEED    how fast they wander, in pixels per second [slowest, fastest]
+  //   FIREFLY_BLINK    seconds per blink [fastest, slowest]
+  //   FIREFLY_AREA     part of the screen they stay in, from the top (0) to the
+  //                    bottom (1). [0.35, 1] = the lower two-thirds.
+  // Color: --firefly in the COLORS block at the top.
+  const SHOW_FIREFLIES = true;
+  const FIREFLY_COUNT  = 16;
+  const FIREFLY_SPEED  = [10, 30];
+  const FIREFLY_BLINK  = [2, 5];
+  const FIREFLY_AREA   = [0.35, 1];
 
   // Small text above the date line.
   const HEADING = "Counting down to";
@@ -805,7 +847,7 @@
   // --- Clouds -----------------------------------------------------------------
   // Gives a cloud a random height (within the band around the moon) and size.
   function shapeCloud(cloud) {
-    cloud.style.top = rand(-10, 55) + "%";
+    cloud.style.top = rand(-15, 35) + "%";
     cloud.style.setProperty("--scale", rand(CLOUD_SIZE[0], CLOUD_SIZE[1]));
   }
   if (SHOW_CLOUDS) {
@@ -822,6 +864,46 @@
       cloud.addEventListener("animationiteration", () => shapeCloud(cloud));
       layer.appendChild(cloud);
     }
+  }
+
+  // --- Fireflies --------------------------------------------------------------
+  // Each firefly flies in a direction that slowly, randomly turns, so it
+  // wanders in lazy curves. If it leaves its area it turns back toward the middle.
+  if (SHOW_FIREFLIES && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const layer = document.getElementById("fireflies");
+    const flies = [];
+    for (let i = 0; i < FIREFLY_COUNT; i++) {
+      const el = document.createElement("div");
+      el.className = "firefly";
+      const blink = rand(FIREFLY_BLINK[0], FIREFLY_BLINK[1]);
+      el.style.setProperty("--blink", blink + "s");
+      el.style.setProperty("--delay", -rand(0, blink) + "s");  // out of sync
+      layer.appendChild(el);
+      flies.push({
+        el,
+        x: rand(0, 1) * innerWidth,
+        y: rand(FIREFLY_AREA[0], FIREFLY_AREA[1]) * innerHeight,
+        heading: rand(0, 2 * Math.PI),               // direction, in radians
+        speed: rand(FIREFLY_SPEED[0], FIREFLY_SPEED[1])
+      });
+    }
+    let last = performance.now();
+    (function fly(now) {
+      const dt = Math.min((now - last) / 1000, 0.1);  // seconds since last frame
+      last = now;
+      const top = FIREFLY_AREA[0] * innerHeight, bottom = FIREFLY_AREA[1] * innerHeight;
+      for (const f of flies) {
+        f.heading += rand(-2, 2) * dt;               // gentle random turning
+        if (f.x < 0 || f.x > innerWidth || f.y < top || f.y > bottom) {
+          // Outside the area: head back toward its center.
+          f.heading = Math.atan2((top + bottom) / 2 - f.y, innerWidth / 2 - f.x) + rand(-0.5, 0.5);
+        }
+        f.x += Math.cos(f.heading) * f.speed * dt;
+        f.y += Math.sin(f.heading) * f.speed * dt;
+        f.el.style.transform = `translate(${f.x}px, ${f.y}px)`;
+      }
+      requestAnimationFrame(fly);
+    })(last);
   }
 
   // --- Shooting stars ---------------------------------------------------------

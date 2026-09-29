@@ -1339,13 +1339,16 @@
 
   // --- Northern lights ---
   // Real auroras hang like curtains: thousands of thin vertical rays with a
-  // bright green lower edge that fades upward through blue into purple. Each
-  // curtain here is drawn as a row of 1-pixel-wide rays (copies of one small
-  // pre-colored strip), on a 1/3-resolution canvas that is then smoothly
-  // enlarged onto the sky. The curtains slowly fold and drift, and the rays
-  // brighten and fade, which gives the shimmer.
-  const AURORA_RES = 3;                              // hidden canvas = 1/3 screen size
+  // bright green lower edge that fades upward through blue into purple.
+  // It's drawn in two passes:
+  //  1. the curtains' glow: columns of a pre-colored strip following each
+  //     curtain's slowly folding lower edge. The glow has no fine detail, so
+  //     it's drawn small (1/GLOW_RES size) and smoothly enlarged.
+  //  2. the rays: a brightness pattern worked out for every single pixel
+  //     across the screen (fine, uneven rays that drift and flicker), which
+  //     then shades the whole glow from top to bottom at full resolution.
   const AURORA_HEIGHT = 0.65;                        // share of the sky it can fill
+  const GLOW_RES = 6;                                // glow drawn at 1/6 size (it's soft anyway)
   // Each curtain: where its lower edge sits (share of the aurora's height),
   // which part of the screen it spans (0 = left, 1 = right), how tall its
   // rays are, how much it folds, how fast it drifts, and how bright it is.
@@ -1354,16 +1357,28 @@
     { base: 0.46, span: [0.28, 1.1],  len: 0.45, fold: 0.1,  drift: -0.04, seed: 4.1, bright: 0.8 },
     { base: 0.74, span: [0.08, 0.92], len: 0.35, fold: 0.06, drift: 0.03,  seed: 7.7, bright: 0.5 }
   ];
-  const aur = document.createElement("canvas");
+  const aur = document.createElement("canvas");     // full resolution
   const actx = aur.getContext("2d");
-  let auroraRay = null;
+  const glow = document.createElement("canvas");    // small: the soft glow
+  const gctx = glow.getContext("2d");
+  const rayMask = document.createElement("canvas");   // 1 pixel tall: the ray pattern
+  const mctx = rayMask.getContext("2d");
+  let auroraRay = null, rayPixels = null;
 
-  // One ray: a 1 x 128 strip colored bottom-to-top (green → blue → purple).
+  // Random but smooth values (0..1) used to make the rays uneven: a table of
+  // random numbers, blended smoothly between neighbours.
+  const NOISE = Array.from({ length: 1024 }, () => Math.random());
+  function noise(x) {
+    const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f);
+    return NOISE[i & 1023] * (1 - u) + NOISE[(i + 1) & 1023] * u;
+  }
+
+  // One ray: a 1 x 256 strip colored bottom-to-top (green → blue → purple).
   function makeAuroraRay() {
     auroraRay = document.createElement("canvas");
-    auroraRay.width = 1; auroraRay.height = 128;
+    auroraRay.width = 1; auroraRay.height = 256;
     const rctx = auroraRay.getContext("2d");
-    const g = rctx.createLinearGradient(0, 128, 0, 0);
+    const g = rctx.createLinearGradient(0, 256, 0, 0);
     g.addColorStop(0,    `rgba(${colors.au1}, 0)`);     // soft bottom edge
     g.addColorStop(0.06, `rgba(${colors.au1}, 1)`);     // brightest just above it
     g.addColorStop(0.3,  `rgba(${colors.au1}, .7)`);
@@ -1371,48 +1386,69 @@
     g.addColorStop(0.8,  `rgba(${colors.au3}, .22)`);
     g.addColorStop(1,    `rgba(${colors.au3}, 0)`);     // fades out at the top
     rctx.fillStyle = g;
-    rctx.fillRect(0, 0, 1, 128);
+    rctx.fillRect(0, 0, 1, 256);
   }
 
   function sizeAurora() {
-    aur.width = Math.max(1, Math.ceil(W / AURORA_RES));
-    aur.height = Math.max(1, Math.ceil(horizon * AURORA_HEIGHT / AURORA_RES));
+    aur.width = Math.ceil(W + 40);                   // a little extra for parallax
+    aur.height = Math.max(1, Math.ceil(horizon * AURORA_HEIGHT));
+    glow.width = Math.ceil(aur.width / GLOW_RES);
+    glow.height = Math.ceil(aur.height / GLOW_RES);
+    rayMask.width = aur.width; rayMask.height = 1;
+    rayPixels = mctx.createImageData(aur.width, 1);
   }
 
   function drawAurora(t, amount) {
     const w = aur.width, h = aur.height, dark = isDark();
     const strength = amount * (dark ? 0.9 : 0.7) * (0.85 + 0.15 * Math.sin(t * 0.3));  // slow breathing
     actx.clearRect(0, 0, w, h);
-    actx.globalCompositeOperation = "lighter";      // overlapping curtains add up
+
+    // Pass 1: the curtains' glow, following their folding lower edges
+    // (x and sizes here are in the small glow canvas's pixels).
+    const gw = glow.width, gh = glow.height, G = GLOW_RES;
+    gctx.clearRect(0, 0, gw, gh);
+    gctx.globalCompositeOperation = "lighter";      // overlapping curtains add up
     for (const c of AURORA_CURTAINS) {
-      const x0 = c.span[0] * w, x1 = c.span[1] * w;
-      for (let x = Math.max(0, Math.floor(x0)); x < Math.min(w, x1); x++) {
-        const X = x * AURORA_RES;                    // screen pixels, so patterns match any size
-        const edge = Math.sin(Math.PI * (x - x0) / (x1 - x0));   // fades at the curtain's ends
-        // folds: the lower edge waves up and down and drifts sideways
-        const fold = Math.sin(X * 0.004 + t * c.drift * 6 + c.seed) * c.fold
-                   + Math.sin(X * 0.011 - t * 0.15 + c.seed * 2) * c.fold * 0.5;
-        // rays: brighter and dimmer bands moving along the curtain (three
-        // overlapping patterns, so they never look evenly spaced), plus flicker
-        const r1 = Math.sin(X * 0.061 + t * 0.8 + c.seed);
-        const r2 = Math.sin(X * 0.0237 - t * 0.35 + c.seed * 1.7);
-        const r3 = Math.sin(X * 0.143 + t * 1.3 + c.seed * 3.1);
-        const rays = clamp(0.5 + 0.5 * (0.55 * r1 * r2 + 0.25 * r3 + 0.2 * r1), 0, 1);
-        const flicker = 0.8 + 0.2 * Math.sin(X * 0.29 + t * 2.3 + c.seed);
-        const a = strength * c.bright * edge * (0.3 + 0.7 * rays) * flicker;
-        if (a < 0.02) continue;
-        const base = h * (c.base + fold), len = h * c.len * (0.7 + 0.5 * rays);
-        actx.globalAlpha = Math.min(1, a);
-        actx.drawImage(auroraRay, x, base - len, 1, len * 1.06);
+      const x0 = c.span[0] * gw, x1 = c.span[1] * gw;
+      for (let gx = Math.max(0, Math.floor(x0)); gx < Math.min(gw, x1); gx++) {
+        const x = gx * G;                            // position on screen, for the patterns
+        const edge = Math.sin(Math.PI * (gx - x0) / (x1 - x0));  // fades at the curtain's ends
+        const fold = Math.sin(x * 0.004 + t * c.drift * 6 + c.seed) * c.fold
+                   + Math.sin(x * 0.011 - t * 0.15 + c.seed * 2) * c.fold * 0.5;
+        const tall = 0.75 + 0.35 * noise(x * 0.01 + t * 0.05 + c.seed * 50);   // ragged tops
+        const a = strength * c.bright * edge;
+        if (a < 0.01) continue;
+        const base = gh * (c.base + fold), len = gh * c.len * tall;
+        gctx.globalAlpha = Math.min(1, a);
+        gctx.drawImage(auroraRay, gx, base - len, 1, len * 1.06);
       }
     }
+    gctx.globalAlpha = 1;
+    gctx.globalCompositeOperation = "source-over";
+    actx.imageSmoothingEnabled = true;
+    actx.imageSmoothingQuality = "high";
+    actx.drawImage(glow, 0, 0, gw * G, gh * G);      // enlarge smoothly to full size
+
+    // Pass 2: the rays. One brightness value per screen pixel across, from
+    // several layers of uneven noise drifting at different speeds.
+    const d = rayPixels.data;
+    for (let x = 0; x < w; x++) {
+      const broad = noise(x * 0.012 + t * 0.06);                // wide bright patches
+      const rays  = noise(x * 0.09  - t * 0.25);                // individual rays
+      const fine  = noise(x * 0.35  + t * 0.9);                 // thin flickering streaks
+      const v = 0.12 + 0.88 * Math.pow(0.35 * broad + 0.45 * rays + 0.2 * fine, 1.6) * 1.9;
+      d[x * 4 + 3] = Math.min(255, v * 255);                    // only the transparency is used
+    }
+    mctx.putImageData(rayPixels, 0, 0);
     actx.globalAlpha = 1;
+    actx.globalCompositeOperation = "destination-in";           // shade the glow by the rays
+    actx.imageSmoothingEnabled = true;
+    actx.drawImage(rayMask, 0, 0, w, 1, 0, 0, w, h);
     actx.globalCompositeOperation = "source-over";
+
     sctx.save();
     sctx.globalCompositeOperation = dark ? "lighter" : "source-over";
-    sctx.imageSmoothingEnabled = true;
-    sctx.imageSmoothingQuality = "high";
-    sctx.drawImage(aur, -parX * 3 * PARALLAX_STRENGTH - 20, 0, W + 40, horizon * AURORA_HEIGHT);
+    sctx.drawImage(aur, -parX * 3 * PARALLAX_STRENGTH - 20, 0);
     sctx.restore();
   }
 

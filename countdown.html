@@ -443,7 +443,7 @@
     translate: calc(var(--px, 0) * -10px) calc(var(--py, 0) * -6px);
     scale: var(--moon-scale, 1);
     transform-origin: 100% 0;               /* grow from the top-right corner */
-    transition: scale 3s ease;
+    transition: scale 3s ease, box-shadow 3s ease;
     background:
       /* craters and darker "seas": circle at x% y%, solid to the first %,
          fading out by the second %. Add/remove lines to change the pattern. */
@@ -455,25 +455,19 @@
       /* surface: bright upper-left fading to a shaded edge */
       radial-gradient(circle at 40% 38%, var(--moon) 0 45%, var(--moon-edge) 100%);
   }
-  /* The glow: a soft ring of light around the moon, drawn as a radial
-     gradient (clear in the middle so it doesn't tint the moon itself). It dims
-     with the moon's phase and slowly swells and shrinks. */
-  .moon::before {
+  .moon::before {                           /* the glow, on its own layer so it can dim */
     content: "";
     position: absolute;
-    inset: -75%;                              /* glow reaches 75% of a moon-width out */
+    inset: 0;
     border-radius: 50%;
-    /* 40% = the moon's edge; the glow fades out by 100% */
-    background: radial-gradient(circle closest-side, transparent 39%, var(--moon-glow) 40%, transparent 100%);
     opacity: calc(.15 + .85 * var(--lit, 1));   /* faint glow even at new moon */
     animation: moon-glow 6s ease-in-out infinite;   /* 6s = one slow glow pulse */
-    pointer-events: none;
   }
   .moon .moon-disc { position: absolute; inset: 0; width: 100%; height: 100%; }
   .moon-disc path { fill: var(--moon-shadow); }
   @keyframes moon-glow {
-    0%, 100% { scale: .85; }
-    50%      { scale: 1.05; }
+    0%, 100% { box-shadow: 0 0 25px 6px var(--moon-glow), 0 0 70px 20px var(--moon-glow); }
+    50%      { box-shadow: 0 0 35px 10px var(--moon-glow), 0 0 100px 35px var(--moon-glow); }
   }
 
   /* ==========================================================================
@@ -581,21 +575,7 @@
     transition: stroke-dashoffset 1s linear;
   }
   /* At the finish (FINISH_MOON_SWELL) the moon grows and glows brightly. */
-  .moon.finale { --moon-scale: 1.5; }
-  /* extra glow at the finish: a soft radial gradient (no box-shadow, whose
-     very wide blur can show tile edges in some browsers) */
-  .moon::after {
-    content: "";
-    position: absolute;
-    inset: -90%;
-    border-radius: 50%;
-    /* 36% = the moon's edge */
-    background: radial-gradient(circle closest-side, transparent 35%, var(--moon-glow) 36%, transparent 100%);
-    opacity: 0;
-    transition: opacity 3s ease;
-    pointer-events: none;
-  }
-  .moon.finale::after { opacity: 1; }
+  .moon.finale { --moon-scale: 1.5; box-shadow: 0 0 80px 30px var(--moon-glow); }
   .moon.finale::before { opacity: 1; animation-duration: 2.5s; }
 
   /* ==========================================================================
@@ -1368,7 +1348,7 @@
   //     across the screen (fine, uneven rays that drift and flicker), which
   //     then shades the whole glow from top to bottom at full resolution.
   const AURORA_HEIGHT = 0.65;                        // share of the sky it can fill
-  const GLOW_RES = 3;                                // glow drawn at 1/3 size (it's soft anyway)
+  const GLOW_RES = 6;                                // glow drawn at 1/6 size (it's soft anyway)
   // Each curtain: where its lower edge sits (share of the aurora's height),
   // which part of the screen it spans (0 = left, 1 = right), how tall its
   // rays are, how much it folds, how fast it drifts, and how bright it is.
@@ -1384,7 +1364,6 @@
   const rayMask = document.createElement("canvas");   // 1 pixel tall: the ray pattern
   const mctx = rayMask.getContext("2d");
   let auroraRay = null, rayPixels = null;
-  let aurDpr = 1;                                    // device pixels per screen pixel
 
   // Random but smooth values (0..1) used to make the rays uneven: a table of
   // random numbers, blended smoothly between neighbours.
@@ -1410,14 +1389,11 @@
     rctx.fillRect(0, 0, 1, 256);
   }
 
-  // Sizes the aurora canvases. The main one matches the screen's real pixel
-  // density (2-3x on phones and Retina screens), so the rays stay sharp.
   function sizeAurora() {
-    aurDpr = window.devicePixelRatio || 1;
-    aur.width = Math.ceil((W + 40) * aurDpr);        // a little extra for parallax
-    aur.height = Math.max(1, Math.ceil(horizon * AURORA_HEIGHT * aurDpr));
-    glow.width = Math.ceil((W + 40) / GLOW_RES);
-    glow.height = Math.max(1, Math.ceil(horizon * AURORA_HEIGHT / GLOW_RES));
+    aur.width = Math.ceil(W + 40);                   // a little extra for parallax
+    aur.height = Math.max(1, Math.ceil(horizon * AURORA_HEIGHT));
+    glow.width = Math.ceil(aur.width / GLOW_RES);
+    glow.height = Math.ceil(aur.height / GLOW_RES);
     rayMask.width = aur.width; rayMask.height = 1;
     rayPixels = mctx.createImageData(aur.width, 1);
   }
@@ -1451,18 +1427,17 @@
     gctx.globalCompositeOperation = "source-over";
     actx.imageSmoothingEnabled = true;
     actx.imageSmoothingQuality = "high";
-    actx.drawImage(glow, 0, 0, gw * G * aurDpr, gh * G * aurDpr);   // enlarge smoothly to full size
+    actx.drawImage(glow, 0, 0, gw * G, gh * G);      // enlarge smoothly to full size
 
     // Pass 2: the rays. One brightness value per screen pixel across, from
     // several layers of uneven noise drifting at different speeds.
     const d = rayPixels.data;
-    for (let px = 0; px < w; px++) {
-      const x = px / aurDpr;                                    // screen position
+    for (let x = 0; x < w; x++) {
       const broad = noise(x * 0.012 + t * 0.06);                // wide bright patches
       const rays  = noise(x * 0.09  - t * 0.25);                // individual rays
       const fine  = noise(x * 0.35  + t * 0.9);                 // thin flickering streaks
       const v = 0.12 + 0.88 * Math.pow(0.35 * broad + 0.45 * rays + 0.2 * fine, 1.6) * 1.9;
-      d[px * 4 + 3] = Math.min(255, v * 255);                   // only the transparency is used
+      d[x * 4 + 3] = Math.min(255, v * 255);                    // only the transparency is used
     }
     mctx.putImageData(rayPixels, 0, 0);
     actx.globalAlpha = 1;
@@ -1473,7 +1448,7 @@
 
     sctx.save();
     sctx.globalCompositeOperation = dark ? "lighter" : "source-over";
-    sctx.drawImage(aur, -parX * 3 * PARALLAX_STRENGTH - 20, 0, w / aurDpr, h / aurDpr);
+    sctx.drawImage(aur, -parX * 3 * PARALLAX_STRENGTH - 20, 0);
     sctx.restore();
   }
 
@@ -2189,17 +2164,11 @@
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const c = document.getElementById("confetti");
     const ctx = c.getContext("2d");
-    // sized to the screen's real pixel density so the pieces stay sharp
-    const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
-      c.width = innerWidth * dpr; c.height = innerHeight * dpr;
-      c.style.width = innerWidth + "px"; c.style.height = innerHeight + "px";
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
+    const resize = () => { c.width = innerWidth; c.height = innerHeight; };
     resize(); addEventListener("resize", resize);
     // 180 = number of pieces. Each gets a random position, size, speed and spin.
     const bits = Array.from({ length: 180 }, () => ({
-      x: Math.random() * innerWidth, y: -20 - Math.random() * innerHeight,
+      x: Math.random() * c.width, y: -20 - Math.random() * c.height,
       w: 6 + Math.random() * 6, h: 8 + Math.random() * 8,       // size (px)
       vy: 2 + Math.random() * 3, vx: -1 + Math.random() * 2,    // fall / drift speed
       r: Math.random() * Math.PI, vr: -.1 + Math.random() * .2, // rotation / spin
@@ -2207,15 +2176,15 @@
     }));
     const start = performance.now();
     (function frame(t) {
-      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      ctx.clearRect(0, 0, c.width, c.height);
       // For CONFETTI_SECONDS, pieces that fall off the bottom restart at the
       // top; after that they fall away and the animation stops by itself.
       const recycle = t - start < CONFETTI_SECONDS * 1000;
       let alive = 0;
       for (const b of bits) {
         b.x += b.vx; b.y += b.vy; b.r += b.vr;
-        if (b.y > innerHeight + 20 && recycle) { b.y = -20; b.x = Math.random() * innerWidth; }
-        if (b.y <= innerHeight + 20) alive++;
+        if (b.y > c.height + 20 && recycle) { b.y = -20; b.x = Math.random() * c.width; }
+        if (b.y <= c.height + 20) alive++;
         ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r);
         ctx.fillStyle = b.color; ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h);
         ctx.restore();
